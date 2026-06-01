@@ -3,6 +3,41 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] — 2026-06-01
+
+Milestone **M3 (generate stage)**: the `exploit` command turns confirmable
+findings into concrete, non-destructive proof-of-concept artifacts — the property
+that separates Caminus from static-only scanners.
+
+### Added — `caminus exploit`
+- New `internal/exploit` package + wired `exploit` command. For each *confirmable*
+  finding (from a trust graph `-i` and/or a `scan --format json` report `--scan`)
+  it generates the concrete attack artifact carrying a benign canary, plus a
+  reversible **Deliver / Evidence / Cleanup** plan (written as `PLAN.md` beside
+  the artifact files, or to stdout with `-o -`).
+- Generators for four confirmable families:
+  - **Injection** (`CAM-INJ-001`, `CAM-GL-INJ-001`) — the attacker-controlled
+    input (`$(echo <canary>)`) the vulnerable pipeline runs as a shell command.
+  - **Pwn-request** (`CAM-PPE-001`) — a fork-PR step that proves a secret is *in
+    scope* by reporting its presence and length only, never its value.
+  - **Self-hosted runner** (`CAM-RUN-001`, `CAM-GL-RUN-001`) — a job that prints
+    the runner host's identity, proving code execution on the self-hosted host.
+  - **OIDC→cloud** (`CAM-OIDC-002`) — a provider-aware (AWS / GCP / Azure),
+    platform-aware (GitHub / GitLab) pipeline that mints the OIDC token, assumes
+    the cloud identity, and makes a single **read-only** identity call
+    (`sts get-caller-identity` / `gcloud auth list` / `az account show`).
+- **Escalation-restraint by design:** generation-only — it performs no live
+  mutation. Canaries are benign, cloud proofs are read-only, secret *values* are
+  never exfiltrated, and every plan ships teardown steps. `--arm` is gated on
+  `--i-own-target` and prints the reversible operator playbook rather than
+  executing it. Live API-driven delivery is a later increment behind this seam.
+- Canaries are derived deterministically (rule + target) so artifacts are stable
+  and diffable.
+
+### Not yet (tracked for M3 continuation)
+- Live API-driven arming (create branch → run → capture canary → auto-cleanup).
+- GitLab→cloud OIDC subject matching in `cloud` (currently GitHub subjects only).
+
 ## [0.3.0] — 2026-06-01
 
 Milestone **M2.5**: multi-platform enumeration and multi-cloud blast radius. The

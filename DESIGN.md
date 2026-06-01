@@ -163,11 +163,17 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   SDKs isolated behind `-tags cloud`, default binary still links nothing
   third-party. Real-SDK record/replay tests, no cloud account needed.
 
-**M3 — dynamic confirmation.**
-- `exploit` generates the concrete artifact (malicious-PR diff / workflow
-  payload with a benign canary) for `confirmable` findings; armed mode observes
-  execution against a target you own and captures evidence. Authorization-gated
-  (`--i-own-target`), reversible, evidence-adding only.
+**M3 — dynamic confirmation. (generate stage ✅)**
+- `exploit` (`internal/exploit`) generates the concrete artifact (attack input /
+  workflow payload with a benign canary) for `confirmable` findings — injection,
+  pwn-request, self-hosted runner, and the OIDC→cloud assumption (provider- and
+  platform-aware) — with a reversible Deliver/Evidence/Cleanup plan. Reads a
+  trust graph and/or a scan report. Generation-only and read-only by design:
+  benign canary, read-only cloud identity call, secret values never exfiltrated,
+  teardown always included. `--arm` is gated (`--i-own-target`) and prints the
+  operator playbook; it performs no live mutation.
+- *Next increment:* live API-driven arming (create branch → run → capture canary
+  → auto-cleanup) behind the same gate; GitLab→cloud subject matching in `cloud`.
 
 **M4 — distribution.**
 - GoReleaser (Linux/macOS/Windows), Homebrew/Scoop, a GitHub Action wrapper,

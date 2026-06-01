@@ -15,9 +15,10 @@ enumeration — `caminus cloud` — uses the official AWS / GCP / Azure SDKs and
 built only with `-tags cloud`; the default build links no third-party packages.)
 
 > **Status:** `scan` (GitHub Actions + GitLab CI), `enum` (GitHub **and**
-> GitLab), `graph`, and `cloud` (AWS, GCP, Azure OIDC blast-radius) are all
-> working. `exploit` (dynamic confirmation) is the next milestone. See
-> [`DESIGN.md`](./DESIGN.md) §Roadmap and [`PLAN.md`](./PLAN.md).
+> GitLab), `graph`, `cloud` (AWS, GCP, Azure OIDC blast-radius), and `exploit`
+> (PoC generation for confirmable findings) are all working. Live API-driven
+> arming is the next increment. See [`DESIGN.md`](./DESIGN.md) §Roadmap and
+> [`PLAN.md`](./PLAN.md).
 
 ---
 
@@ -84,6 +85,29 @@ caminus graph -i graph.json --min-severity high
 This surfaces chains like *poisoned pipeline → OIDC federation → assumable cloud
 identity* (`CAM-OIDC-002`: an AWS role, GCP service account, or Azure app), plus
 paths to self-hosted runners and CI secrets — for both GitHub and GitLab graphs.
+
+### Confirm a finding (PoC generation)
+
+`exploit` turns a **confirmable** finding into a concrete, non-destructive PoC —
+the attack input / pipeline payload with a benign canary — plus a reversible
+Deliver / Evidence / Cleanup plan.
+
+```bash
+# Generate a PoC for the OIDC→cloud assumption (writes poc/<rule>-<target>/)
+caminus exploit -i graph.json --finding CAM-OIDC-002
+
+# Injection/runner PoCs from a scan report; target you own
+caminus scan . --format json > scan.json
+caminus exploit --scan scan.json --finding CAM-INJ-001 --repo me/mine -o -
+
+# Print the reversible run+teardown playbook (no live mutation; gated)
+caminus exploit -i graph.json --finding CAM-OIDC-002 --repo me/mine --arm --i-own-target
+```
+
+By design `exploit` performs **no live mutation**: canaries are benign, the cloud
+proof is a single read-only identity call, secret *values* are never exfiltrated,
+and every plan ends with teardown. `--arm` requires `--i-own-target` and prints
+the operator playbook; it does not act on the target.
 
 Exit codes: `0` clean · `1` finding at/above the gate (default `high`) ·
 `2` usage/error · `3` capability not yet implemented.
