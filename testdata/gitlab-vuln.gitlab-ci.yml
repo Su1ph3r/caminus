@@ -1,0 +1,24 @@
+stages:
+  - build
+
+include:
+  - remote: 'https://example.com/ci/template.yml'
+  - project: 'my-group/ci-templates'
+    ref: main
+    file: '/build.yml'
+
+variables:
+  CI_DEBUG_TRACE: "true"
+
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  tags:
+    - self-managed
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    - echo "Building MR ${CI_MERGE_REQUEST_TITLE}"
+    - echo "$CI_COMMIT_MESSAGE" | build-tool

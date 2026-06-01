@@ -1,0 +1,20 @@
+# Binaries
+/caminus
+/caminus.exe
+/bin/
+/dist/
+
+# Output artifacts
+*.sarif
+graph.json
+*.report.json
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

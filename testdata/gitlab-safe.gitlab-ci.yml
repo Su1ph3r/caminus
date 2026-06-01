@@ -1,0 +1,15 @@
+stages:
+  - test
+
+include:
+  - project: 'my-group/ci-templates'
+    ref: 0123456789abcdef0123456789abcdef01234567
+    file: '/test.yml'
+
+test:
+  stage: test
+  image: golang:1.26
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  script:
+    - go test ./...

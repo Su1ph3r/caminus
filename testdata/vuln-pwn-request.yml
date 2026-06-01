@@ -1,0 +1,21 @@
+name: PR Handler
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions: write-all
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Greet
+        run: echo "Thanks ${{ github.event.pull_request.title }}"
+      - name: Triage
+        run: |
+          echo "comment: ${{ github.event.comment.body }}"

@@ -1,0 +1,246 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/Su1ph3r/caminus/internal/gitlabci"
+	"github.com/Su1ph3r/caminus/internal/model"
+	"github.com/Su1ph3r/caminus/internal/reporter"
+	"github.com/Su1ph3r/caminus/internal/rules"
+	"github.com/Su1ph3r/caminus/internal/workflow"
+)
+
+// runScan performs static attack-surface analysis of pipeline definitions across
+// GitHub Actions and GitLab CI.
+func runScan(argv []string) int {
+	fs := flag.NewFlagSet("scan", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	format := fs.String("format", "text", "output format: text|json")
+	minSev := fs.String("min-severity", "info", "report findings at or above: critical|high|medium|low|info")
+	gate := fs.String("gate", "high", "exit non-zero if any finding at or above this severity is reported (use 'none' to disable)")
+	platform := fs.String("platform", "auto", "pipeline platform: auto|github|gitlab")
+	fs.Usage = func() {
+		fmt.Fprint(os.Stderr, `caminus scan — static attack-surface analysis of CI/CD pipeline definitions
+
+USAGE
+  caminus scan [path ...] [options]
+
+  path   File or directory to scan. Directories are searched for GitHub
+         Actions workflows (.github/workflows/*.{yml,yaml}) and GitLab CI files
+         (.gitlab-ci.yml, .gitlab/**). Defaults to ".".
+
+OPTIONS
+`)
+		fs.PrintDefaults()
+	}
+	// Parse flags and positionals in any order: flag.Parse stops at the first
+	// non-flag token, so loop — consume leading flags, grab the positional,
+	// repeat with the remainder. All scan flags are valued (no bools), so this
+	// is unambiguous.
+	var paths []string
+	rest := argv
+	for {
+		if err := fs.Parse(rest); err != nil {
+			return 2
+		}
+		if fs.NArg() == 0 {
+			break
+		}
+		paths = append(paths, fs.Arg(0))
+		rest = fs.Args()[1:]
+	}
+
+	min, ok := parseSeverity(*minSev)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "caminus scan: invalid --min-severity %q\n", *minSev)
+		return 2
+	}
+	gateSev, gateOn := parseSeverity(*gate)
+	if !gateOn && *gate != "none" {
+		fmt.Fprintf(os.Stderr, "caminus scan: invalid --gate %q\n", *gate)
+		return 2
+	}
+	gateEnabled := *gate != "none"
+
+	switch *platform {
+	case "auto", "github", "gitlab":
+	default:
+		fmt.Fprintf(os.Stderr, "caminus scan: invalid --platform %q\n", *platform)
+		return 2
+	}
+
+	if len(paths) == 0 {
+		paths = []string{"."}
+	}
+
+	var files []string
+	for _, p := range paths {
+		found, err := discoverPipelines(p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
+			return 2
+		}
+		files = append(files, found...)
+	}
+	if len(files) == 0 {
+		fmt.Fprintln(os.Stderr, "caminus scan: no pipeline files found")
+		return 2
+	}
+
+	var findings []model.Finding
+	for _, f := range files {
+		for _, fnd := range analyzeFile(f, *platform) {
+			if fnd.Severity.Rank() >= min.Rank() {
+				findings = append(findings, fnd)
+			}
+		}
+	}
+
+	switch *format {
+	case "json":
+		if err := reporter.JSON(os.Stdout, version, findings); err != nil {
+			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
+			return 2
+		}
+	case "sarif":
+		if err := reporter.SARIF(os.Stdout, version, findings); err != nil {
+			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
+			return 2
+		}
+	case "text":
+		reporter.Text(os.Stdout, findings)
+	default:
+		fmt.Fprintf(os.Stderr, "caminus scan: invalid --format %q\n", *format)
+		return 2
+	}
+
+	if gateEnabled {
+		for _, f := range findings {
+			if f.Severity.Rank() >= gateSev.Rank() {
+				return 1
+			}
+		}
+	}
+	return 0
+}
+
+// analyzeFile loads a single pipeline file with the right parser and runs the
+// matching rule set, dispatching on the detected (or forced) platform.
+func analyzeFile(path, override string) []model.Finding {
+	switch detectPlatform(path, override) {
+	case "gitlab":
+		doc, err := gitlabci.Load(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
+			return nil
+		}
+		return rules.RunGitLab(doc)
+	default:
+		doc, err := workflow.Load(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
+			return nil
+		}
+		return rules.Run(doc, rules.Default())
+	}
+}
+
+// detectPlatform decides which parser/ruleset a file gets. An explicit
+// --platform (github|gitlab) wins; otherwise it is inferred from the path.
+func detectPlatform(path, override string) string {
+	if override == "github" || override == "gitlab" {
+		return override
+	}
+	if isGitLabCI(path) {
+		return "gitlab"
+	}
+	return "github"
+}
+
+// parseSeverity maps a string to a Severity; the bool is false for unknown
+// values (with "none" handled by callers).
+func parseSeverity(s string) (model.Severity, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "critical", "crit":
+		return model.SevCritical, true
+	case "high":
+		return model.SevHigh, true
+	case "medium", "med":
+		return model.SevMedium, true
+	case "low":
+		return model.SevLow, true
+	case "info", "informational":
+		return model.SevInfo, true
+	default:
+		return model.SevInfo, false
+	}
+}
+
+// discoverPipelines resolves a path to pipeline files. A file is returned as-is;
+// a directory is searched for recognized GitHub Actions and GitLab CI files. If
+// none are recognized by location, it falls back to all YAML (so pointing
+// directly at a non-standard workflow directory still works).
+func discoverPipelines(root string) ([]string, error) {
+	info, err := os.Stat(root)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return []string{root}, nil
+	}
+	var recognized, anyYAML []string
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if skipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !isYAML(p) {
+			return nil
+		}
+		if isGitHubWorkflow(p) || isGitLabCI(p) {
+			recognized = append(recognized, p)
+		}
+		anyYAML = append(anyYAML, p)
+		return nil
+	})
+	if len(recognized) > 0 {
+		return recognized, nil
+	}
+	return anyYAML, nil
+}
+
+// skipDir prunes noisy directories from the walk (but never .github/.gitlab).
+func skipDir(name string) bool {
+	switch name {
+	case ".git", "node_modules", "vendor", ".terraform", "dist", "bin":
+		return true
+	}
+	return false
+}
+
+func isYAML(p string) bool {
+	ext := strings.ToLower(filepath.Ext(p))
+	return ext == ".yml" || ext == ".yaml"
+}
+
+func isGitHubWorkflow(p string) bool {
+	return strings.Contains(filepath.ToSlash(p), "/workflows/") && isYAML(p)
+}
+
+func isGitLabCI(p string) bool {
+	base := filepath.Base(p)
+	if base == ".gitlab-ci.yml" || strings.HasSuffix(base, ".gitlab-ci.yml") {
+		return true
+	}
+	return strings.Contains(filepath.ToSlash(p), "/.gitlab/") && isYAML(p)
+}
