@@ -56,10 +56,19 @@ type Edge struct {
 	Attrs map[string]string `json:"attrs,omitempty"`
 }
 
-// Graph is the trust graph for a target ecosystem.
+// Graph is the trust graph for a target ecosystem. Findings holds issues
+// discovered during enumeration that are not expressible as static scan rules
+// (e.g. over-broad OIDC federation), so the graph file is a self-contained
+// artifact.
 type Graph struct {
-	Nodes map[string]*Node `json:"nodes"`
-	Edges []Edge           `json:"edges"`
+	Nodes    map[string]*Node `json:"nodes"`
+	Edges    []Edge           `json:"edges"`
+	Findings []Finding        `json:"findings,omitempty"`
+}
+
+// AddFinding appends an enumeration-time finding to the graph.
+func (g *Graph) AddFinding(f Finding) {
+	g.Findings = append(g.Findings, f)
 }
 
 // NewGraph returns an empty graph ready for AddNode/AddEdge.

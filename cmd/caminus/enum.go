@@ -12,6 +12,7 @@ import (
 	"github.com/Su1ph3r/caminus/internal/model"
 	"github.com/Su1ph3r/caminus/internal/platform"
 	gh "github.com/Su1ph3r/caminus/internal/platform/github"
+	"github.com/Su1ph3r/caminus/internal/reporter"
 	"github.com/Su1ph3r/caminus/internal/vcr"
 )
 
@@ -109,6 +110,10 @@ func runEnum(argv []string) int {
 		return 2
 	}
 	printGraphSummary(os.Stderr, g, *out)
+	if len(g.Findings) > 0 {
+		fmt.Fprintf(os.Stderr, "\n%d enumeration finding(s):\n", len(g.Findings))
+		reporter.Text(os.Stderr, g.Findings)
+	}
 	return 0
 }
 

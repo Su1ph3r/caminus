@@ -77,8 +77,14 @@ live from cloud APIs** (AWS first) — see *Dependency note*.
   `entry-weight × sink-value ÷ path-len`, MITRE-tagged steps; `graph` cmd loads
   graph.json, optional `--scan` to mark entry points, text + json, severity
   filter. Tests + end-to-end (enum→graph) verified. **Zero-dep.**
-- [ ] **3. OIDC modeling + `CAM-OIDC-001`** — over-broad federation (wildcard
-  `sub`, missing `aud`, branch-unconstrained trust). GitHub side. **Zero-dep.**
+- [x] **3. OIDC modeling + `CAM-OIDC-001`** — `internal/platform/github/oidc.go`
+  computes the effective subject pattern from the repo's claim customization and
+  flags repo-wide subjects (no ref/environment scoping) as over-broad. Emits
+  `CAM-OIDC-001` (Medium, honest framing — actionable once cloud trust is
+  matched in Task 4) into `Graph.Findings`; annotates the OIDC node
+  (`subject_pattern`, `over_broad`) and bumps its sink value so OIDC→cloud paths
+  rank higher. `enum` surfaces enum findings; tests + end-to-end verified.
+  **Zero-dep.**
 - [ ] **4. AWS cloud read** — `internal/cloud/aws` (AWS SDK v2: iam + sts).
   Enumerate IAM roles trusting `token.actions.githubusercontent.com`, parse the
   `sub`/`aud` trust conditions, resolve which pipeline subjects can assume which

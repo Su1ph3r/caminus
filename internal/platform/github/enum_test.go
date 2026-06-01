@@ -62,7 +62,18 @@ func TestEnumerateBuildsGraph(t *testing.T) {
 
 	mustNode("gh:secret:repo:acme/widgets:PROD_DEPLOY_KEY", model.NodeSecret)
 	mustNode("gh:secret:org:acme:ORG_NPM_TOKEN", model.NodeSecret)
-	mustNode("gh:oidc:acme/widgets", model.NodeOIDCTrust)
+	oidc := mustNode("gh:oidc:acme/widgets", model.NodeOIDCTrust)
+	if oidc.Attrs["subject_pattern"] == "" {
+		t.Error("oidc node missing subject_pattern")
+	}
+	// The fixture's subject includes "context" (scoped), so it is not over-broad
+	// and must not raise CAM-OIDC-001.
+	if oidc.Attrs["over_broad"] != "false" {
+		t.Errorf("oidc over_broad = %q, want false", oidc.Attrs["over_broad"])
+	}
+	if len(g.Findings) != 0 {
+		t.Errorf("expected no enumeration findings for scoped OIDC, got %d", len(g.Findings))
+	}
 
 	// org -> repo containment edge exists
 	var hasContain bool

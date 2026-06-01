@@ -52,6 +52,9 @@ func sinkValue(n *model.Node) int {
 		}
 		return 0 // hosted runners are ephemeral, not a persistence target
 	case model.NodeOIDCTrust:
+		if n.Attrs["over_broad"] == "true" {
+			return 4 // repo-wide federation token is a stronger pivot to cloud
+		}
 		return 3
 	case model.NodeSecret:
 		if strings.HasPrefix(n.Attrs["scope"], "org:") {

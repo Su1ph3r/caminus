@@ -5,6 +5,14 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — M2 Task 3
+- **OIDC subject modeling + `CAM-OIDC-001`.** `enum` computes each repo's
+  effective OIDC subject from its claim customization and flags repo-wide
+  subjects (no ref/environment scoping) as over-broad federation — a token any
+  workflow run, including a fork-influenced one, can present. Recorded on the
+  OIDC node and emitted as a graph finding; over-broad OIDC nodes rank higher in
+  attack-path synthesis.
+
 ### Added — M2 Task 2
 - **`graph` — ranked attack-path synthesis.** `internal/graph` walks the trust
   graph from attacker-controllable entry points (poisonable pipelines) to

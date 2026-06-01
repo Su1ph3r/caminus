@@ -263,13 +263,19 @@ func (e *Enumerator) enumerateOIDC(ctx context.Context, r repo, repoID string, g
 		e.skip("oidc sub", r.FullName, err)
 		return
 	}
+	pattern, overBroad, reason := oidcSubject(r.FullName, sub)
 	id := "gh:oidc:" + r.FullName
 	g.AddNodeOnce(&model.Node{ID: id, Label: "OIDC subject: " + r.FullName, Kind: model.NodeOIDCTrust, Attrs: map[string]string{
-		"use_default": strconv.FormatBool(sub.UseDefault),
-		"claim_keys":  strings.Join(sub.IncludeClaimKeys, ","),
-		"oidc_issuer": "token.actions.githubusercontent.com",
+		"use_default":     strconv.FormatBool(sub.UseDefault),
+		"claim_keys":      strings.Join(sub.IncludeClaimKeys, ","),
+		"oidc_issuer":     "token.actions.githubusercontent.com",
+		"subject_pattern": pattern,
+		"over_broad":      strconv.FormatBool(overBroad),
 	}})
 	g.AddEdge(repoID, id, model.EdgeFederates)
+	if overBroad {
+		g.AddFinding(oidcFinding(r.FullName, pattern, reason))
+	}
 }
 
 func (e *Enumerator) enumerateBranchProtection(ctx context.Context, r repo, repoNode *model.Node) {
