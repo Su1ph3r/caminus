@@ -168,7 +168,7 @@ func Synthesize(g *model.Graph) []model.AttackPath {
 func buildPath(g *model.Graph, entry, sink *model.Node, ids []string, w int) model.AttackPath {
 	steps := make([]model.AttackStep, 0, len(ids))
 	for _, id := range ids {
-		steps = append(steps, stepFor(g.Nodes[id], id == entry.ID, id == sink.ID))
+		steps = append(steps, stepFor(g.Nodes[id], id == entry.ID))
 	}
 	return model.AttackPath{
 		Title:       entry.Label + " → " + sinkLabel(sink),
@@ -178,42 +178,41 @@ func buildPath(g *model.Graph, entry, sink *model.Node, ids []string, w int) mod
 	}
 }
 
-// stepFor maps a node (and its role in the path) to an attack technique with a
-// MITRE ATT&CK ID.
-func stepFor(n *model.Node, isEntry, isSink bool) model.AttackStep {
+// stepFor maps a node to an attack technique with a MITRE ATT&CK ID. The entry
+// node is always the poisoned-pipeline primitive; every other node is labelled
+// by kind, whether it is the terminal sink or an intermediate hop.
+func stepFor(n *model.Node, isEntry bool) model.AttackStep {
 	s := model.AttackStep{NodeID: n.ID}
 	if n == nil {
 		return s
 	}
-	switch {
-	case isEntry:
+	if isEntry {
 		s.Technique = "Poisoned Pipeline Execution"
 		s.MITRE = "T1059"
 		s.Detail = "attacker-controllable pipeline (" + n.Attrs["triggers"] + ")"
-	case isSink:
-		switch n.Kind {
-		case model.NodeSecret:
-			s.Technique = "Credential access from CI secret"
-			s.MITRE = "T1552"
-			s.Detail = n.Attrs["scope"]
-		case model.NodeRunner:
-			s.Technique = "Self-hosted runner code execution / persistence"
-			s.MITRE = "T1543"
-			s.Detail = n.Attrs["scope"]
-		case model.NodeOIDCTrust:
-			s.Technique = "Cloud access via OIDC federation"
-			s.MITRE = "T1550.001"
-		case model.NodeCloudRole, model.NodeResource:
-			s.Technique = "Assume cloud role"
-			s.MITRE = "T1078.004"
-		}
-	default:
-		switch n.Kind {
-		case model.NodeRepo:
-			s.Technique = "Repository scope"
-		case model.NodeIdentity:
-			s.Technique = "Organization scope"
-		}
+		return s
+	}
+	switch n.Kind {
+	case model.NodeSecret:
+		s.Technique = "Credential access from CI secret"
+		s.MITRE = "T1552"
+		s.Detail = n.Attrs["scope"]
+	case model.NodeRunner:
+		s.Technique = "Self-hosted runner code execution / persistence"
+		s.MITRE = "T1543"
+		s.Detail = n.Attrs["scope"]
+	case model.NodeOIDCTrust:
+		s.Technique = "Cloud access via OIDC federation"
+		s.MITRE = "T1550.001"
+	case model.NodeCloudRole, model.NodeResource:
+		s.Technique = "Assume cloud role"
+		s.MITRE = "T1078.004"
+		s.Detail = n.Attrs["broadness"]
+	case model.NodeRepo:
+		s.Technique = "Repository scope"
+		s.Detail = "transit"
+	case model.NodeIdentity:
+		s.Technique = "Organization scope"
 		s.Detail = "transit"
 	}
 	return s

@@ -5,6 +5,19 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — M2 Task 4
+- **`cloud` — OIDC→cloud blast radius (AWS).** `internal/cloud` parses IAM role
+  trust policies that federate to GitHub Actions OIDC, classifies their
+  permissiveness (scoped / ref-wildcard / repo-wildcard / no-subject), and
+  matches their `sub` conditions against enumerated CI subjects to add
+  CloudRole nodes + can-assume edges — completing the CI → OIDC → cloud-role
+  attack path. Where an attacker-controllable pipeline can assume a permissive
+  role it emits **`CAM-OIDC-002`** (High, Critical for repo-wildcard trust).
+- The trust-policy parser and subject matcher are dependency-free and unit
+  tested; the AWS SDK (iam:ListRoles) is isolated behind the **`cloud` build
+  tag**. The default binary links no third-party packages; `caminus cloud`
+  without the tag degrades to a rebuild hint.
+
 ### Added — M2 Task 3
 - **OIDC subject modeling + `CAM-OIDC-001`.** `enum` computes each repo's
   effective OIDC subject from its claim customization and flags repo-wide

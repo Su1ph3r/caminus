@@ -10,7 +10,9 @@ primitives it finds, not just flag YAML patterns.
 *Caminus* (Latin: forge, hearth, furnace) — the forge is where source is turned
 into shipped artifacts, and where the supply chain breaks.
 
-Single binary. Zero dependencies. Linux, macOS, Windows.
+Single binary, dependency-free core. Linux, macOS, Windows. (Cloud
+enumeration — `caminus cloud` — uses the official AWS SDK and is built only
+with `-tags cloud`; the default build links no third-party packages.)
 
 > **Status:** v0.1.0 (Sprint 1) — the static `scan` engine covers **GitHub
 > Actions and GitLab CI**, with text / JSON / SARIF output. `enum` / `graph` /
@@ -103,6 +105,13 @@ against a target you own.
 | `CAM-GL-DBG-001` | High | `CI_DEBUG_TRACE`/`CI_DEBUG_SERVICES` leaking secrets to job logs |
 | `CAM-GL-RUN-001` | High/Med | Privileged Docker-in-Docker build |
 | `CAM-GL-SUP-001` | Low | `include: remote:` / unpinned cross-project include |
+
+**Enumeration (`enum` / `cloud`)** — findings that require API access, not just YAML
+
+| ID | Severity | What it catches |
+|----|----------|-----------------|
+| `CAM-OIDC-001` | Medium | Over-broad OIDC subject — repo-wide federation token (no ref/environment scoping) |
+| `CAM-OIDC-002` | High/Crit | Attacker-controllable pipeline can assume a permissively-trusted cloud role (CI → OIDC → cloud) |
 
 Caminus deliberately does **not** flag untrusted input routed through an
 intermediate `env:` variable (GitHub) or a quoted environment read (GitLab) —

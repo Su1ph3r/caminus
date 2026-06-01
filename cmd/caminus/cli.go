@@ -29,6 +29,8 @@ func run(argv []string) int {
 		return runEnum(rest)
 	case "graph":
 		return runGraph(rest)
+	case "cloud":
+		return runCloud(rest)
 	case "exploit":
 		return runExploit(rest)
 	default:
@@ -49,7 +51,7 @@ func route(argv []string) (string, []string) {
 		return "help", argv[1:]
 	case "-v", "--version", "version":
 		return "version", argv[1:]
-	case "scan", "enum", "graph", "exploit":
+	case "scan", "enum", "graph", "cloud", "exploit":
 		return argv[0], argv[1:]
 	default:
 		return argv[0], argv[1:] // unknown; run() reports it
@@ -66,6 +68,7 @@ COMMANDS
   scan      Static attack-surface analysis of pipeline definitions (no token)
   enum      Read-only enumeration into the trust graph (GitHub; GitLab [M2.5])
   graph     Synthesize ranked attack paths from the trust graph
+  cloud     Resolve OIDC→cloud blast radius (AWS; needs -tags cloud build)
   exploit   Generate/confirm an attack primitive against a target you own  [M3]
   version   Print version
   help      Print this help

@@ -148,8 +148,10 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   repos, workflows, runners (org + repo, including non-default/self-hosted),
   secret names, environments, branch protections, OIDC subject claims.
 - Trust-graph build; `graph` walks edges to ranked attack paths with MITRE
-  mapping; merge `scan` findings + a Nubicustos cloud export to resolve OIDC →
-  cloud-role → resource blast radius.
+  mapping. `cloud` resolves the OIDC → cloud-role blast radius by reading IAM
+  trust policies **directly via the AWS SDK** (the security-critical trust
+  matching is dependency-free and unit-tested; the SDK fetch is isolated behind
+  the `cloud` build tag so the default binary links nothing third-party).
 
 **M3 — dynamic confirmation.**
 - `exploit` generates the concrete artifact (malicious-PR diff / workflow

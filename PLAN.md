@@ -85,11 +85,14 @@ live from cloud APIs** (AWS first) — see *Dependency note*.
   (`subject_pattern`, `over_broad`) and bumps its sink value so OIDC→cloud paths
   rank higher. `enum` surfaces enum findings; tests + end-to-end verified.
   **Zero-dep.**
-- [ ] **4. AWS cloud read** — `internal/cloud/aws` (AWS SDK v2: iam + sts).
-  Enumerate IAM roles trusting `token.actions.githubusercontent.com`, parse the
-  `sub`/`aud` trust conditions, resolve which pipeline subjects can assume which
-  roles → CloudRole/Resource nodes + can-assume/reaches edges + blast-radius.
-  **Behind `-tags cloud`** so the core binary stays dependency-free.
+- [x] **4. AWS cloud read** — `internal/cloud`: dependency-free trust-policy
+  parser + subject matcher + `Enrich` (graph mutation, `CAM-OIDC-002`) in
+  always-compiled files with full unit tests; AWS SDK `Fetch` (iam:ListRoles)
+  isolated in `aws.go` behind `-tags cloud`, stub otherwise. `cloud` command
+  adds CloudRole nodes + can-assume edges and the CI→OIDC→cloud attack path.
+  Containment verified: default build links **0** AWS pkgs, `-tags cloud` links
+  57; default `cloud` degrades to a rebuild hint. *Deferred: AWS record/replay
+  fixtures (Task 5), resource-level blast radius, GCP/Azure (M2.5).*
 - [ ] **5. Record/replay test harness** — fixture API/cloud responses (à la
   Vercelsior `--record`/`--replay`) so CI needs no live token/creds.
 
