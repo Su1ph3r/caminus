@@ -20,8 +20,14 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test ./...
+      # Cloud support (AWS SDK) is gated behind -tags cloud; its trust-matching
+      # is tested via a recorded IAM fixture, so this needs no AWS credentials.
+      - name: Test (cloud)
+        run: go test -tags cloud ./...
       - name: Build
         run: go build -o caminus ./cmd/caminus
+      - name: Build (cloud)
+        run: go build -tags cloud -o caminus-cloud ./cmd/caminus
       # Dogfood: Caminus scans its own workflows. The gate fails the build on
       # any high/critical finding in this repo's CI configuration.
       - name: Self-scan

@@ -13,17 +13,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 )
 
-// Interaction is one recorded request/response pair.
+// Interaction is one recorded request/response pair. Match is a request-body
+// discriminator (e.g. "Action=ListRoles") so query-protocol APIs like AWS IAM —
+// where every call is POST / with the action in the body — can be told apart.
+// It is empty for body-less GET requests (e.g. the GitHub REST client).
 type Interaction struct {
 	Method  string            `json:"method"`
 	Path    string            `json:"path"`
 	Query   string            `json:"query,omitempty"`
+	Match   string            `json:"match,omitempty"`
 	Status  int               `json:"status"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    string            `json:"body"`
@@ -73,8 +78,32 @@ func Record(path string, under http.RoundTripper) *Transport {
 	return &Transport{mode: modeRecord, path: path, cassette: &Cassette{}, under: under}
 }
 
-func key(method, path, query string) string {
-	return method + " " + path + "?" + normalizeQuery(query)
+func key(method, path, query, match string) string {
+	return method + " " + path + "?" + normalizeQuery(query) + "#" + match
+}
+
+// requestDiscriminator returns a stable body discriminator for matching. For
+// AWS query-protocol bodies (Action=…&Version=…) it returns "Action=<name>";
+// otherwise the raw body (or "" if there is none). It reads and restores
+// req.Body so the request remains sendable in record mode.
+func requestDiscriminator(req *http.Request) string {
+	if req.Body == nil {
+		return ""
+	}
+	b, err := io.ReadAll(req.Body)
+	if err != nil {
+		return ""
+	}
+	req.Body = io.NopCloser(bytes.NewReader(b))
+	if len(b) == 0 {
+		return ""
+	}
+	if v, err := url.ParseQuery(string(b)); err == nil {
+		if a := v.Get("Action"); a != "" {
+			return "Action=" + a
+		}
+	}
+	return string(b)
 }
 
 // normalizeQuery sorts query params so cassette lookups are order-independent.
@@ -96,9 +125,9 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (t *Transport) replay(req *http.Request) (*http.Response, error) {
-	want := key(req.Method, req.URL.Path, req.URL.RawQuery)
+	want := key(req.Method, req.URL.Path, req.URL.RawQuery, requestDiscriminator(req))
 	for _, in := range t.cassette.Interactions {
-		if key(in.Method, in.Path, in.Query) == want {
+		if key(in.Method, in.Path, in.Query, in.Match) == want {
 			return buildResponse(req, in), nil
 		}
 	}
@@ -106,6 +135,7 @@ func (t *Transport) replay(req *http.Request) (*http.Response, error) {
 }
 
 func (t *Transport) record(req *http.Request) (*http.Response, error) {
+	match := requestDiscriminator(req)
 	resp, err := t.under.RoundTrip(req)
 	if err != nil {
 		return nil, err
@@ -117,6 +147,7 @@ func (t *Transport) record(req *http.Request) (*http.Response, error) {
 		Method:  req.Method,
 		Path:    req.URL.Path,
 		Query:   req.URL.RawQuery,
+		Match:   match,
 		Status:  resp.StatusCode,
 		Headers: map[string]string{},
 		Body:    string(body),

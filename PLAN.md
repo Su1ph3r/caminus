@@ -93,8 +93,13 @@ live from cloud APIs** (AWS first) — see *Dependency note*.
   Containment verified: default build links **0** AWS pkgs, `-tags cloud` links
   57; default `cloud` degrades to a rebuild hint. *Deferred: AWS record/replay
   fixtures (Task 5), resource-level blast radius, GCP/Azure (M2.5).*
-- [ ] **5. Record/replay test harness** — fixture API/cloud responses (à la
-  Vercelsior `--record`/`--replay`) so CI needs no live token/creds.
+- [x] **5. Record/replay test harness** — `internal/vcr` extended with request
+  body discriminator matching (AWS IAM is query-protocol: POST / with the action
+  in the body). `cloud` gained `--replay`/`--record`; the AWS SDK honours an
+  injected transport + anonymous creds. Hand-built IAM ListRoles cassette +
+  cloud-tagged replay test drive the real SDK XML deserializer with no AWS
+  account. CI now runs `go test -tags cloud ./...` and `go build -tags cloud`.
+  Full enum→cloud→graph pipeline verified end-to-end via replay.
 
 ### Dependency note
 Direct cloud reads add the AWS SDK, changing the project's "zero dependencies"

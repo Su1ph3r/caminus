@@ -5,6 +5,15 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — M2 Task 5
+- **Record/replay for the cloud path.** `internal/vcr` now matches on a request
+  body discriminator (AWS IAM is query-protocol — every call is `POST /` with
+  the action in the body). `caminus cloud` gained `--record`/`--replay`, and the
+  AWS SDK accepts an injected transport with anonymous credentials. A recorded
+  IAM `ListRoles` fixture drives the real SDK deserializer in a cloud-tagged
+  test, so the OIDC→cloud logic is CI-tested without an AWS account. CI runs the
+  `-tags cloud` build and tests.
+
 ### Added — M2 Task 4
 - **`cloud` — OIDC→cloud blast radius (AWS).** `internal/cloud` parses IAM role
   trust policies that federate to GitHub Actions OIDC, classifies their

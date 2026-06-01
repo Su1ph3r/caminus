@@ -1,0 +1,15 @@
+{
+  "interactions": [
+    {
+      "method": "POST",
+      "path": "/",
+      "query": "",
+      "match": "Action=ListRoles",
+      "status": 200,
+      "headers": {
+        "Content-Type": "text/xml"
+      },
+      "body": "<?xml version=\"1.0\"?><ListRolesResponse xmlns=\"https://iam.amazonaws.com/doc/2010-05-08/\"><ListRolesResult><IsTruncated>false</IsTruncated><Roles><member><Path>/</Path><RoleName>deployer</RoleName><RoleId>AROADEPLOYER0001</RoleId><Arn>arn:aws:iam::123456789012:role/deployer</Arn><CreateDate>2024-01-01T00:00:00Z</CreateDate><AssumeRolePolicyDocument>%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%7B%22Effect%22%3A%22Allow%22%2C%22Principal%22%3A%7B%22Federated%22%3A%22arn%3Aaws%3Aiam%3A%3A123456789012%3Aoidc-provider/token.actions.githubusercontent.com%22%7D%2C%22Action%22%3A%22sts%3AAssumeRoleWithWebIdentity%22%2C%22Condition%22%3A%7B%22StringEquals%22%3A%7B%22token.actions.githubusercontent.com%3Aaud%22%3A%22sts.amazonaws.com%22%7D%2C%22StringLike%22%3A%7B%22token.actions.githubusercontent.com%3Asub%22%3A%22repo%3Aacme/widgets%3A%2A%22%7D%7D%7D%5D%7D</AssumeRolePolicyDocument></member><member><Path>/</Path><RoleName>ci-readonly</RoleName><RoleId>AROAREADONLY0002</RoleId><Arn>arn:aws:iam::123456789012:role/ci-readonly</Arn><CreateDate>2024-01-01T00:00:00Z</CreateDate><AssumeRolePolicyDocument>%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%7B%22Effect%22%3A%22Allow%22%2C%22Principal%22%3A%7B%22Federated%22%3A%22arn%3Aaws%3Aiam%3A%3A123456789012%3Aoidc-provider/token.actions.githubusercontent.com%22%7D%2C%22Action%22%3A%22sts%3AAssumeRoleWithWebIdentity%22%2C%22Condition%22%3A%7B%22StringEquals%22%3A%7B%22token.actions.githubusercontent.com%3Aaud%22%3A%22sts.amazonaws.com%22%7D%2C%22StringLike%22%3A%7B%22token.actions.githubusercontent.com%3Asub%22%3A%22repo%3Aacme/widgets%3Aref%3Arefs/heads/main%22%7D%7D%7D%5D%7D</AssumeRolePolicyDocument></member><member><Path>/</Path><RoleName>legacy-cognito</RoleName><RoleId>AROACOGNITO0003</RoleId><Arn>arn:aws:iam::123456789012:role/legacy-cognito</Arn><CreateDate>2024-01-01T00:00:00Z</CreateDate><AssumeRolePolicyDocument>%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%7B%22Effect%22%3A%22Allow%22%2C%22Principal%22%3A%7B%22Federated%22%3A%22cognito-identity.amazonaws.com%22%7D%2C%22Action%22%3A%22sts%3AAssumeRoleWithWebIdentity%22%7D%5D%7D</AssumeRolePolicyDocument></member></Roles></ListRolesResult><ResponseMetadata><RequestId>00000000-0000-0000-0000-000000000000</RequestId></ResponseMetadata></ListRolesResponse>"
+    }
+  ]
+}

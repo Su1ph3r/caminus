@@ -5,10 +5,12 @@ package cloud
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 )
 
@@ -16,22 +18,43 @@ import (
 // among their trust policies. It is compiled only with `-tags cloud`. Read-only:
 // it calls iam:ListRoles (which returns each role's AssumeRolePolicyDocument)
 // and parses the documents with the dependency-free parser in trust.go.
+//
+// Options.Transport (record/replay) and Options.Anonymous (static dummy creds
+// for replay) make this exercisable in CI without a live account.
 func Fetch(ctx context.Context, opts Options) ([]GitHubTrust, error) {
-	loadOpts := []func(*config.LoadOptions) error{}
+	var loadOpts []func(*config.LoadOptions) error
 	if opts.Region != "" {
 		loadOpts = append(loadOpts, config.WithRegion(opts.Region))
 	}
 	if opts.Profile != "" {
 		loadOpts = append(loadOpts, config.WithSharedConfigProfile(opts.Profile))
 	}
+	if opts.Transport != nil {
+		loadOpts = append(loadOpts, config.WithHTTPClient(&http.Client{Transport: opts.Transport}))
+	}
+	if opts.Anonymous {
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("replay", "replay", "")))
+		if opts.Region == "" {
+			loadOpts = append(loadOpts, config.WithRegion("us-east-1"))
+		}
+	}
+
 	cfg, err := config.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("cloud: load AWS config: %w", err)
 	}
+	return fetchRoles(ctx, iam.NewFromConfig(cfg))
+}
 
-	client := iam.NewFromConfig(cfg)
+// rolePager is the subset of the IAM client fetchRoles needs, so tests can
+// drive it through a paginator over a recorded response.
+type rolePager interface {
+	ListRoles(ctx context.Context, in *iam.ListRolesInput, optFns ...func(*iam.Options)) (*iam.ListRolesOutput, error)
+}
+
+func fetchRoles(ctx context.Context, client rolePager) ([]GitHubTrust, error) {
 	paginator := iam.NewListRolesPaginator(client, &iam.ListRolesInput{})
-
 	var out []GitHubTrust
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)

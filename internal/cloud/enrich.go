@@ -3,6 +3,7 @@ package cloud
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/Su1ph3r/caminus/internal/model"
@@ -17,6 +18,13 @@ var ErrNotBuilt = errors.New("cloud support not built in; rebuild with: go build
 type Options struct {
 	Region  string
 	Profile string
+
+	// Transport, when set, replaces the AWS SDK's HTTP transport — used to
+	// record or replay IAM responses (the cloud build honors it; the stub
+	// ignores it). Anonymous swaps the credential chain for static dummy
+	// credentials, required for replay where no real creds exist.
+	Transport http.RoundTripper
+	Anonymous bool
 }
 
 // FetchFunc retrieves GitHub-OIDC IAM trusts. It is implemented by the AWS SDK

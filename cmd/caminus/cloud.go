@@ -5,10 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/Su1ph3r/caminus/internal/cloud"
 	"github.com/Su1ph3r/caminus/internal/reporter"
+	"github.com/Su1ph3r/caminus/internal/vcr"
 )
 
 // runCloud enriches a trust graph with the OIDC → cloud blast radius: it reads
@@ -22,6 +24,8 @@ func runCloud(argv []string) int {
 	out := fs.String("o", "", "output file (default: overwrite the input)")
 	region := fs.String("region", "", "AWS region (else from environment/profile)")
 	profile := fs.String("profile", "", "AWS shared-config profile")
+	replay := fs.String("replay", "", "replay IAM responses from a cassette (no AWS creds needed)")
+	record := fs.String("record", "", "record IAM responses to a cassette")
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, "caminus cloud — resolve OIDC→cloud blast radius (AWS; requires -tags cloud build)\n\nOPTIONS\n")
 		fs.PrintDefaults()
@@ -33,6 +37,23 @@ func runCloud(argv []string) int {
 		*out = *in
 	}
 
+	// Optional record/replay transport for the AWS SDK.
+	var transport http.RoundTripper
+	var anonymous bool
+	var recorder *vcr.Transport
+	switch {
+	case *replay != "":
+		rt, err := vcr.Replay(*replay)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "caminus cloud: %v\n", err)
+			return 2
+		}
+		transport, anonymous = rt, true
+	case *record != "":
+		recorder = vcr.Record(*record, nil)
+		transport = recorder
+	}
+
 	g, err := loadGraph(*in)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "caminus cloud: %v\n", err)
@@ -40,7 +61,8 @@ func runCloud(argv []string) int {
 	}
 	before := len(g.Findings)
 
-	bindings, err := cloud.Enrich(context.Background(), g, cloud.Fetch, cloud.Options{Region: *region, Profile: *profile})
+	opts := cloud.Options{Region: *region, Profile: *profile, Transport: transport, Anonymous: anonymous}
+	bindings, err := cloud.Enrich(context.Background(), g, cloud.Fetch, opts)
 	if err != nil {
 		if errors.Is(err, cloud.ErrNotBuilt) {
 			fmt.Fprintln(os.Stderr, "caminus cloud: "+err.Error())
@@ -48,6 +70,11 @@ func runCloud(argv []string) int {
 		}
 		fmt.Fprintf(os.Stderr, "caminus cloud: %v\n", err)
 		return 2
+	}
+	if recorder != nil {
+		if err := recorder.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "caminus cloud: save cassette: %v\n", err)
+		}
 	}
 
 	if err := writeGraph(*out, g); err != nil {
