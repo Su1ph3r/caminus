@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -115,6 +116,30 @@ func TestEnumerateWorkflowContentUnavailable(t *testing.T) {
 	}
 	if pipe.Attrs["entrypoint"] != "false" {
 		t.Errorf("unassessed workflow must default entrypoint=false, got %q", pipe.Attrs["entrypoint"])
+	}
+}
+
+func TestSkipDistinguishesAbsentFromError(t *testing.T) {
+	e := New(NewClient(platform.Credentials{}, &http.Client{}))
+	if e.skip("x", "y", ErrForbidden) {
+		t.Error("ErrForbidden (out of scope) should be skippable, not flagged incomplete")
+	}
+	if e.skip("x", "y", ErrNotFound) {
+		t.Error("ErrNotFound (absent) should be skippable, not flagged incomplete")
+	}
+	if !e.skip("x", "y", errors.New("connection reset")) {
+		t.Error("a genuine transport error should mark the graph incomplete")
+	}
+}
+
+func TestMarkIncompleteAccumulates(t *testing.T) {
+	g := model.NewGraph()
+	g.AddNode(&model.Node{ID: "n", Kind: model.NodeRepo, Attrs: map[string]string{}})
+	markIncomplete(g, "n", "runners")
+	markIncomplete(g, "n", "secrets")
+	markIncomplete(g, "n", "runners") // duplicate ignored
+	if got := g.Nodes["n"].Attrs["enum_incomplete"]; got != "runners,secrets" {
+		t.Errorf("enum_incomplete = %q, want runners,secrets", got)
 	}
 }
 

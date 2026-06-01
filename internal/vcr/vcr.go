@@ -145,8 +145,13 @@ func (t *Transport) record(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+	if err != nil {
+		// Don't persist a truncated body as the canonical recording — that
+		// would surface much later as a confusing replay-time parse error.
+		return nil, fmt.Errorf("vcr: read response body for %s %s: %w", req.Method, req.URL.Path, err)
+	}
 
 	in := Interaction{
 		Method:  req.Method,

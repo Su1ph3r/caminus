@@ -72,20 +72,20 @@ func runEnum(argv []string) int {
 			fmt.Fprintf(os.Stderr, "caminus enum: %v\n", err)
 			return 2
 		}
-		hc = &http.Client{Transport: rt}
+		hc = newHTTPClient(rt)
 	case *record != "":
 		if tok == "" {
 			fmt.Fprintln(os.Stderr, "caminus enum: --record requires a token (--token or CAMINUS_TOKEN)")
 			return 2
 		}
 		recorder = vcr.Record(*record, nil)
-		hc = &http.Client{Transport: recorder}
+		hc = newHTTPClient(recorder)
 	default:
 		if tok == "" {
 			fmt.Fprintln(os.Stderr, "caminus enum: a token is required (--token or CAMINUS_TOKEN), or use --replay")
 			return 2
 		}
-		hc = &http.Client{}
+		hc = newHTTPClient(nil)
 	}
 
 	creds := platform.Credentials{Token: tok, BaseURL: *baseURL}
@@ -117,6 +117,21 @@ func runEnum(argv []string) int {
 	return 0
 }
 
+// newHTTPClient builds the enumeration HTTP client. CheckRedirect refuses
+// cross-host redirects so a hostile API response cannot bounce an authenticated
+// request to an unintended (e.g. internal/metadata) host.
+func newHTTPClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+				return fmt.Errorf("refusing cross-host redirect to %s", req.URL.Host)
+			}
+			return nil
+		},
+	}
+}
+
 func writeGraph(path string, g *model.Graph) error {
 	data, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
@@ -133,9 +148,12 @@ func writeGraph(path string, g *model.Graph) error {
 
 func printGraphSummary(w *os.File, g *model.Graph, out string) {
 	byKind := map[model.NodeKind]int{}
-	entry, unassessed := 0, 0
+	entry, unassessed, incomplete := 0, 0, 0
 	for _, n := range g.Nodes {
 		byKind[n.Kind]++
+		if n.Attrs["enum_incomplete"] != "" {
+			incomplete++
+		}
 		if n.Kind == model.NodePipeline {
 			if n.Attrs["entrypoint"] == "true" {
 				entry++
@@ -154,5 +172,8 @@ func printGraphSummary(w *os.File, g *model.Graph, out string) {
 		byKind[model.NodeSecret], byKind[model.NodeOIDCTrust], entry)
 	if unassessed > 0 {
 		fmt.Fprintf(w, "  warning: %d workflow(s) UNASSESSED — content unreadable (token may lack `contents` scope); not necessarily benign\n", unassessed)
+	}
+	if incomplete > 0 {
+		fmt.Fprintf(w, "  warning: trust graph is PARTIAL — %d node(s) had resources that could not be read (see enum_incomplete attrs)\n", incomplete)
 	}
 }

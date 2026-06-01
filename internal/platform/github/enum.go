@@ -160,7 +160,9 @@ func (e *Enumerator) enumerateRepo(ctx context.Context, r repo, g *model.Graph) 
 func (e *Enumerator) enumerateWorkflows(ctx context.Context, r repo, repoID string, g *model.Graph) {
 	var wl workflowList
 	if err := e.c.getJSON(ctx, "/repos/"+r.FullName+"/actions/workflows", &wl); err != nil {
-		e.skip("workflows", r.FullName, err)
+		if e.skip("workflows", r.FullName, err) {
+			markIncomplete(g, repoID, "workflows")
+		}
 		return
 	}
 	for _, w := range wl.Workflows {
@@ -239,7 +241,9 @@ func (e *Enumerator) listSecrets(ctx context.Context, path string) ([]ghSecret, 
 func (e *Enumerator) enumerateRepoRunners(ctx context.Context, r repo, repoID string, g *model.Graph) {
 	runners, err := e.listRunners(ctx, "/repos/"+r.FullName+"/actions/runners")
 	if err != nil {
-		e.skip("repo runners", r.FullName, err)
+		if e.skip("repo runners", r.FullName, err) {
+			markIncomplete(g, repoID, "runners")
+		}
 		return
 	}
 	e.addRunners(runners, "repo:"+r.FullName, repoID, g)
@@ -248,7 +252,9 @@ func (e *Enumerator) enumerateRepoRunners(ctx context.Context, r repo, repoID st
 func (e *Enumerator) enumerateOrgRunners(ctx context.Context, org string, g *model.Graph) {
 	runners, err := e.listRunners(ctx, "/orgs/"+org+"/actions/runners")
 	if err != nil {
-		e.skip("org runners", org, err)
+		if e.skip("org runners", org, err) {
+			markIncomplete(g, "gh:org:"+org, "runners")
+		}
 		return
 	}
 	e.addRunners(runners, "org:"+org, "gh:org:"+org, g)
@@ -279,7 +285,9 @@ func (e *Enumerator) addRunners(runners []ghRunner, scope, ownerID string, g *mo
 func (e *Enumerator) enumerateRepoSecrets(ctx context.Context, r repo, repoID string, g *model.Graph) {
 	secrets, err := e.listSecrets(ctx, "/repos/"+r.FullName+"/actions/secrets")
 	if err != nil {
-		e.skip("repo secrets", r.FullName, err)
+		if e.skip("repo secrets", r.FullName, err) {
+			markIncomplete(g, repoID, "secrets")
+		}
 		return
 	}
 	for _, s := range secrets {
@@ -292,7 +300,9 @@ func (e *Enumerator) enumerateRepoSecrets(ctx context.Context, r repo, repoID st
 func (e *Enumerator) enumerateOrgSecrets(ctx context.Context, org string, g *model.Graph) {
 	secrets, err := e.listSecrets(ctx, "/orgs/"+org+"/actions/secrets")
 	if err != nil {
-		e.skip("org secrets", org, err)
+		if e.skip("org secrets", org, err) {
+			markIncomplete(g, "gh:org:"+org, "secrets")
+		}
 		return
 	}
 	for _, s := range secrets {
@@ -320,7 +330,9 @@ func (e *Enumerator) enumerateEnvironments(ctx context.Context, r repo, repoNode
 		return nil
 	})
 	if err != nil {
-		e.skip("environments", r.FullName, err)
+		if e.skip("environments", r.FullName, err) {
+			markNodeIncomplete(repoNode, "environments")
+		}
 		return
 	}
 	if len(envs) == 0 {
@@ -342,7 +354,9 @@ func (e *Enumerator) enumerateEnvironments(ctx context.Context, r repo, repoNode
 func (e *Enumerator) enumerateOIDC(ctx context.Context, r repo, repoID string, g *model.Graph) {
 	var sub oidcSub
 	if err := e.c.getJSON(ctx, "/repos/"+r.FullName+"/actions/oidc/customization/sub", &sub); err != nil {
-		e.skip("oidc sub", r.FullName, err)
+		if e.skip("oidc sub", r.FullName, err) {
+			markIncomplete(g, repoID, "oidc")
+		}
 		return
 	}
 	pattern, overBroad, reason := oidcSubject(r.FullName, sub)
@@ -372,16 +386,43 @@ func (e *Enumerator) enumerateBranchProtection(ctx context.Context, r repo, repo
 		// 404 here means the branch has no protection rule.
 		repoNode.Attrs["default_branch_protected"] = "false"
 	default:
-		e.skip("branch protection", r.FullName, err)
+		if e.skip("branch protection", r.FullName, err) {
+			markNodeIncomplete(repoNode, "branch_protection")
+		}
 	}
 }
 
-func (e *Enumerator) skip(resource, target string, err error) {
+// skip logs a non-fatal enumeration error and reports whether it was a GENUINE
+// error (transport/5xx/unexpected) as opposed to "resource absent / out of
+// scope" (404/403). A true return means the caller should mark the owning node
+// enum_incomplete, so a silently-partial graph is not mistaken for complete.
+func (e *Enumerator) skip(resource, target string, err error) bool {
 	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
 		e.Logf("skip %s for %s: %v", resource, target, err)
-		return
+		return false
 	}
 	e.Logf("error reading %s for %s: %v", resource, target, err)
+	return true
+}
+
+// markIncomplete records on a node that a class of resource could not be read,
+// so enumeration completeness is honestly reflected in the graph.
+func markIncomplete(g *model.Graph, nodeID, resource string) {
+	markNodeIncomplete(g.Nodes[nodeID], resource)
+}
+
+func markNodeIncomplete(n *model.Node, resource string) {
+	if n == nil {
+		return
+	}
+	if n.Attrs == nil {
+		n.Attrs = map[string]string{}
+	}
+	if prev := n.Attrs["enum_incomplete"]; prev == "" {
+		n.Attrs["enum_incomplete"] = resource
+	} else if !strings.Contains(prev, resource) {
+		n.Attrs["enum_incomplete"] = prev + "," + resource
+	}
 }
 
 // isHostedLabel reports whether a runner label identifies a GitHub-hosted

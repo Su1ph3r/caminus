@@ -31,9 +31,10 @@ var (
 
 // Client is a minimal read-only GitHub REST client.
 type Client struct {
-	http    *http.Client
-	baseURL string
-	token   string
+	http     *http.Client
+	baseURL  string
+	baseHost string
+	token    string
 }
 
 // NewClient builds a client from credentials. hc may be nil (a default client
@@ -46,7 +47,26 @@ func NewClient(creds platform.Credentials, hc *http.Client) *Client {
 	if hc == nil {
 		hc = &http.Client{}
 	}
-	return &Client{http: hc, baseURL: base, token: creds.Token}
+	c := &Client{http: hc, baseURL: base, token: creds.Token}
+	if u, err := url.Parse(base); err == nil {
+		c.baseHost = u.Host
+	}
+	return c
+}
+
+// sameHost reports whether rawURL targets the configured API host. Relative
+// endpoints (those used internally) are same-host by construction. This gates
+// where the token may be sent and which pagination URLs may be followed, so a
+// hostile API response cannot redirect an authenticated request off-host.
+func (c *Client) sameHost(rawURL string) bool {
+	if strings.HasPrefix(rawURL, "/") {
+		return true
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Host, c.baseHost)
 }
 
 // raw issues a GET and returns the response (headers intact) plus the full body.
@@ -63,7 +83,9 @@ func (c *Client) raw(ctx context.Context, endpoint string) (*http.Response, []by
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", apiVersion)
-	if c.token != "" {
+	// Attach the token ONLY to the configured API host, so a malicious server
+	// (or a Link/redirect pointing off-host) can never receive the PAT.
+	if c.token != "" && c.sameHost(u) {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
@@ -121,6 +143,12 @@ func (c *Client) getList(ctx context.Context, endpoint string, decode func([]byt
 			return err
 		}
 		next = nextLink(resp.Header.Get("Link"))
+		// Refuse to follow a pagination URL onto a different host — a hostile
+		// API could otherwise use it to drive enumeration (SSRF) at internal
+		// targets. Legitimate GitHub/GHE next URLs are always same-host.
+		if next != "" && !c.sameHost(next) {
+			return fmt.Errorf("github: refusing off-host pagination URL %q (possible SSRF)", next)
+		}
 	}
 	return nil
 }

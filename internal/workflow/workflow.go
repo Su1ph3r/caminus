@@ -31,18 +31,26 @@ func Load(path string) (*Doc, error) {
 	return Parse(path, data), nil
 }
 
-// Parse builds a Doc from raw bytes. CRLF is normalized so line scanning is
-// stable across platforms (Caminus is developed on Windows).
+// Parse builds a Doc from raw bytes. CRLF is normalized and a leading UTF-8 BOM
+// is stripped (common from Windows editors — and this project is developed on
+// Windows) so that first-line top-level key detection is not defeated.
 func Parse(path string, data []byte) *Doc {
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	text = strings.TrimPrefix(text, "\ufeff")
 	return &Doc{Path: path, Lines: strings.Split(text, "\n")}
 }
 
 var (
-	reOnKey     = regexp.MustCompile(`^on:\s*(.*?)\s*$`)
-	reChildKey  = regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_-]*):`)
-	reRunKey    = regexp.MustCompile(`^run:\s*([|>].*)?$`)
-	reRunInline = regexp.MustCompile(`(?:^|\s)run:\s+[^|>\s]`)
+	// reOnKey tolerates a quoted top-level key ("on":/'on':), the YAML idiom
+	// used to avoid `on` being coerced to the boolean true.
+	reOnKey = regexp.MustCompile(`^["']?on["']?\s*:\s*(.*?)\s*$`)
+	// reChildKey also tolerates a quoted child key ("pull_request_target":).
+	reChildKey = regexp.MustCompile(`^\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
+	reRunKey   = regexp.MustCompile(`^run:\s*([|>].*)?$`)
+	// reRunInline is anchored to a YAML key position (line start, optionally a
+	// list-item dash) so that the substring "run: " inside a quoted value
+	// (e.g. an env: string "please run: ...") is not mistaken for a run step.
+	reRunInline = regexp.MustCompile(`^\s*(?:-\s+)?run:\s+[^|>\s]`)
 )
 
 // indentOf returns the number of leading spaces on a line (tabs count as one).

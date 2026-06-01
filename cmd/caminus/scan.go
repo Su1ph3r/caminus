@@ -80,10 +80,13 @@ OPTIONS
 
 	var files []string
 	for _, p := range paths {
-		found, err := discoverPipelines(p)
+		found, warnings, err := discoverPipelines(p)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
 			return 2
+		}
+		for _, w := range warnings {
+			fmt.Fprintf(os.Stderr, "caminus scan: warning: skipped unreadable path %s\n", w)
 		}
 		files = append(files, found...)
 	}
@@ -185,17 +188,25 @@ func parseSeverity(s string) (model.Severity, bool) {
 // a directory is searched for recognized GitHub Actions and GitLab CI files. If
 // none are recognized by location, it falls back to all YAML (so pointing
 // directly at a non-standard workflow directory still works).
-func discoverPipelines(root string) ([]string, error) {
+//
+// It also returns any directory-walk errors (e.g. an unreadable subtree) as
+// warnings rather than swallowing them: a security scanner must not report a
+// tree "clean" when part of it could not be read.
+func discoverPipelines(root string) (files []string, warnings []string, err error) {
 	info, err := os.Stat(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !info.IsDir() {
-		return []string{root}, nil
+		return []string{root}, nil, nil
 	}
 	var recognized, anyYAML []string
-	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			warnings = append(warnings, fmt.Sprintf("%s: %v", p, walkErr))
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir // skip the unreadable subtree, but record it
+			}
 			return nil
 		}
 		if d.IsDir() {
@@ -214,9 +225,9 @@ func discoverPipelines(root string) ([]string, error) {
 		return nil
 	})
 	if len(recognized) > 0 {
-		return recognized, nil
+		return recognized, warnings, nil
 	}
-	return anyYAML, nil
+	return anyYAML, warnings, nil
 }
 
 // skipDir prunes noisy directories from the walk (but never .github/.gitlab).

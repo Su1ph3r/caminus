@@ -31,9 +31,11 @@ func Load(path string) (*Doc, error) {
 	return Parse(path, data), nil
 }
 
-// Parse builds a Doc from raw bytes, normalizing CRLF for stable line scanning.
+// Parse builds a Doc from raw bytes, normalizing CRLF and stripping a leading
+// UTF-8 BOM so first-line key detection (script:/include:) is not defeated.
 func Parse(path string, data []byte) *Doc {
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	text = strings.TrimPrefix(text, "\ufeff")
 	return &Doc{Path: path, Lines: strings.Split(text, "\n")}
 }
 
@@ -163,51 +165,78 @@ type Include struct {
 
 var (
 	reIncludeKind = regexp.MustCompile(`^\s*(?:-\s*)?(local|remote|project|template|file):\s*(.*?)\s*$`)
-	reRefVal      = regexp.MustCompile(`^\s*ref:\s*["']?([^"'\s]+)["']?`)
+	reRefVal      = regexp.MustCompile(`^\s*(?:-\s+)?ref:\s*["']?([^"'\s]+)["']?`)
 )
 
-// Includes parses include: entries and, for project includes, the nearby ref:.
+// Includes parses the top-level include: stanza. It handles the inline scalar
+// form (include: 'file.yml') and the block-list form, grouping the block into
+// list items and parsing each item as a unit. Parsing per item — rather than
+// line-by-line — means a project include's ref: is found regardless of whether
+// it precedes or follows the project: key, and that file: (a sub-key of a
+// project include) is not mistaken for a separate include.
 func (d *Doc) Includes() []Include {
 	var out []Include
-	inInclude := false
-	includeIndent := -1
-	for i, line := range d.Lines {
-		t := strings.TrimSpace(line)
-		if t == "" || strings.HasPrefix(t, "#") {
+	for i := 0; i < len(d.Lines); i++ {
+		t := strings.TrimSpace(d.Lines[i])
+		if !strings.HasPrefix(t, "include:") {
 			continue
 		}
-		if strings.HasPrefix(t, "include:") {
-			inInclude = true
-			includeIndent = indentOf(line)
-			// inline form: include: https://... or include: 'file.yml'
-			if v := strings.TrimSpace(strings.TrimPrefix(t, "include:")); v != "" {
-				out = append(out, Include{Line: i + 1, Kind: classifyInline(v), Raw: v})
-			}
-			continue
+		includeIndent := indentOf(d.Lines[i])
+		// Inline scalar form is self-contained — no block children to scan.
+		if v := strings.TrimSpace(strings.TrimPrefix(t, "include:")); v != "" {
+			out = append(out, Include{Line: i + 1, Kind: classifyInline(v), Raw: v})
+			break
 		}
-		if inInclude {
-			if indentOf(line) <= includeIndent {
-				inInclude = false
-			}
-		}
-		if !inInclude {
-			continue
-		}
-		if m := reIncludeKind.FindStringSubmatch(line); m != nil {
-			inc := Include{Line: i + 1, Kind: m[1], Raw: m[2]}
-			if m[1] == "project" {
-				// look ahead a few lines for ref:
-				for j := i + 1; j < len(d.Lines) && j <= i+5; j++ {
-					if rm := reRefVal.FindStringSubmatch(d.Lines[j]); rm != nil {
-						inc.Ref = rm[1]
-						break
-					}
+		// Block form: split following entries into list items and parse each.
+		itemStart := -1
+		flush := func(end int) {
+			if itemStart >= 0 {
+				if inc := d.parseIncludeItem(itemStart, end); inc != nil {
+					out = append(out, *inc)
 				}
 			}
-			out = append(out, inc)
 		}
+		j := i + 1
+		for ; j < len(d.Lines); j++ {
+			lt := strings.TrimSpace(d.Lines[j])
+			if lt == "" || strings.HasPrefix(lt, "#") {
+				continue
+			}
+			if indentOf(d.Lines[j]) <= includeIndent {
+				break // dedented out of the include: block
+			}
+			if strings.HasPrefix(lt, "-") {
+				flush(j)
+				itemStart = j
+			}
+		}
+		flush(j)
+		break // include: is a single top-level key
 	}
 	return out
+}
+
+// parseIncludeItem parses one include list item (lines [start,end)). It picks
+// the identifying kind (project/remote/local/template preferred over file,
+// which is a project sub-key) and any ref:, in either order.
+func (d *Doc) parseIncludeItem(start, end int) *Include {
+	kind, raw, ref := "", "", ""
+	for j := start; j < end && j < len(d.Lines); j++ {
+		if ref == "" {
+			if rm := reRefVal.FindStringSubmatch(d.Lines[j]); rm != nil {
+				ref = rm[1]
+			}
+		}
+		if m := reIncludeKind.FindStringSubmatch(d.Lines[j]); m != nil {
+			if kind == "" || (kind == "file" && m[1] != "file") {
+				kind, raw = m[1], m[2]
+			}
+		}
+	}
+	if kind == "" {
+		return nil
+	}
+	return &Include{Line: start + 1, Kind: kind, Raw: raw, Ref: ref}
 }
 
 func classifyInline(v string) string {

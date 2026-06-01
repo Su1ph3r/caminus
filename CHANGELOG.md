@@ -5,6 +5,27 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed — full-codebase bug hunt
+False-negatives and a credential-leak vector found by a `--full` multi-agent hunt
+over the v0.1 scan engine (which earlier diff-scoped reviews had not covered):
+- **Detection blind spots (HIGH):** a quoted top-level `"on":` key, and a leading
+  UTF-8 BOM, each made the workflow trigger parser return nothing — silently
+  disabling pwn-request, self-hosted-runner-escalation, and entry-point detection
+  on common YAML idioms. Both parsers now tolerate quoted keys and strip a BOM.
+- **Token exfiltration / SSRF (HIGH):** the GitHub client followed `Link:
+  rel="next"` URLs verbatim and attached the PAT to any host. The token is now
+  sent only to the configured API host, off-host pagination is refused, and the
+  HTTP client rejects cross-host redirects.
+- **Silent incompleteness (HIGH):** `scan` swallowed directory-walk errors
+  (unreadable dir → "clean") — now warned; `enum` collapsed transport failures
+  into "resource absent" — now marks the node `enum_incomplete` and warns.
+- **False positives / robustness (MED):** `run:` inside a quoted value no longer
+  triggers a CRITICAL injection finding; a GitLab `project:` include's `ref:` is
+  read regardless of key order (and `file:` is no longer counted as a separate
+  include); `vcr` record fails loudly on a truncated body instead of persisting it.
+- Added the previously-missing `workflow`, `gitlabci`, `vcr`, and `client` test
+  files covering all of the above.
+
 ### Fixed — bug-hunt review
 - **Crash fix:** `caminus graph` panicked (nil-pointer deref in `stepFor`) when a
   `graph.json` contained an edge to a node absent from `nodes` (a dangling
