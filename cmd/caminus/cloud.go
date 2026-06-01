@@ -22,12 +22,14 @@ func runCloud(argv []string) int {
 	fs.SetOutput(os.Stderr)
 	in := fs.String("i", "graph.json", "trust-graph input file (from `caminus enum`)")
 	out := fs.String("o", "", "output file (default: overwrite the input)")
+	provider := fs.String("provider", "aws", "cloud provider: aws | gcp | azure")
 	region := fs.String("region", "", "AWS region (else from environment/profile)")
 	profile := fs.String("profile", "", "AWS shared-config profile")
-	replay := fs.String("replay", "", "replay IAM responses from a cassette (no AWS creds needed)")
-	record := fs.String("record", "", "record IAM responses to a cassette")
+	project := fs.String("project", "", "GCP project id (required for --provider gcp)")
+	replay := fs.String("replay", "", "replay API responses from a cassette (no cloud creds needed)")
+	record := fs.String("record", "", "record API responses to a cassette")
 	fs.Usage = func() {
-		fmt.Fprint(os.Stderr, "caminus cloud — resolve OIDC→cloud blast radius (AWS; requires -tags cloud build)\n\nOPTIONS\n")
+		fmt.Fprint(os.Stderr, "caminus cloud — resolve OIDC→cloud blast radius (aws|gcp|azure; requires -tags cloud build)\n\nOPTIONS\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(argv); err != nil {
@@ -35,6 +37,12 @@ func runCloud(argv []string) int {
 	}
 	if *out == "" {
 		*out = *in
+	}
+
+	fetch, perr := selectFetch(*provider, *project)
+	if perr != "" {
+		fmt.Fprintln(os.Stderr, "caminus cloud: "+perr)
+		return 2
 	}
 
 	// Optional record/replay transport for the AWS SDK.
@@ -62,10 +70,11 @@ func runCloud(argv []string) int {
 	before := len(g.Findings)
 
 	opts := cloud.Options{
-		Region: *region, Profile: *profile, Transport: transport, Anonymous: anonymous,
+		Region: *region, Profile: *profile, Project: *project,
+		Transport: transport, Anonymous: anonymous,
 		Logf: func(format string, a ...any) { fmt.Fprintf(os.Stderr, "  "+format+"\n", a...) },
 	}
-	bindings, err := cloud.Enrich(context.Background(), g, cloud.Fetch, opts)
+	bindings, err := cloud.Enrich(context.Background(), g, fetch, opts)
 	if err != nil {
 		if errors.Is(err, cloud.ErrNotBuilt) {
 			fmt.Fprintln(os.Stderr, "caminus cloud: "+err.Error())
@@ -98,4 +107,23 @@ func runCloud(argv []string) int {
 		reporter.Text(os.Stderr, newFindings)
 	}
 	return 0
+}
+
+// selectFetch maps the --provider value to its read function and validates
+// provider-specific requirements. It returns a non-empty error string on a
+// usage problem.
+func selectFetch(provider, project string) (cloud.FetchFunc, string) {
+	switch provider {
+	case "aws":
+		return cloud.Fetch, ""
+	case "gcp":
+		if project == "" {
+			return nil, "--provider gcp requires --project <id>"
+		}
+		return cloud.FetchGCP, ""
+	case "azure":
+		return cloud.FetchAzure, ""
+	default:
+		return nil, fmt.Sprintf("unknown provider %q (want aws, gcp, or azure)", provider)
+	}
 }

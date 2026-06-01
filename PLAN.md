@@ -126,7 +126,22 @@ Ariadne export → stretch.
 [--scan scan.json] --format text` → ranked paths · AWS OIDC trust resolved on a
 fixture · `CAM-OIDC-001` fires on wildcard `sub` · record/replay tests green.
 
+## M2.5 → v0.3.0 (done)
+
+Multi-platform enum + multi-cloud blast radius.
+- [x] **GitLab enum** — `internal/platform/gitlab`: zero-dep REST (v4) client +
+  enumerator (group/project, `.gitlab-ci.yml` entry-point detection via the
+  GitLab rule set, runners, CI/CD variables, `id_tokens:` OIDC). `enum
+  --platform gitlab`; self-managed via `--base-url`. Replay cassette + tests.
+- [x] **GCP cloud read** — `internal/cloud/gcp.go` (`-tags cloud`): Workload
+  Identity Federation (pools/providers + SA IAM bindings) → GitHub trusts. Pure
+  member parser (`gcp_member.go`) always-compiled + unit-tested. Replay test.
+- [x] **Azure cloud read** — `internal/cloud/azure.go` (`-tags cloud`): app-
+  registration federated identity credentials via Microsoft Graph. Replay test.
+- [x] **`cloud --provider aws|gcp|azure`** (+`--project` for GCP); provider-
+  neutral `GitHubTrust` + per-cloud CAM-OIDC-002 wording. Default build links 0
+  cloud SDKs; GCP/Azure isolated behind `-tags cloud`.
+
 ## Later milestones
-- **M2.5:** GitLab enum + GCP/Azure cloud read; indirect-PPE; structural YAML;
-  Vinculum parser + Ariadne export.
-- **M3:** `exploit` — authorization-gated dynamic confirmation.
+- **M3:** `exploit` — authorization-gated dynamic confirmation; GitLab→cloud
+  subject matching; indirect-PPE; structural YAML; Vinculum + Ariadne export.

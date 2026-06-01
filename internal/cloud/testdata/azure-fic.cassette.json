@@ -1,0 +1,32 @@
+{
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/v1.0/organization",
+      "query": "$select=id",
+      "status": 200,
+      "body": "{\"value\": [{\"id\": \"tenant-1234\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v1.0/applications",
+      "query": "$select=id,appId,displayName",
+      "status": 200,
+      "body": "{\"value\": [{\"id\": \"app-obj-1\", \"appId\": \"client-aaa\", \"displayName\": \"deployer-app\"}, {\"id\": \"app-obj-2\", \"appId\": \"client-bbb\", \"displayName\": \"legacy-app\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v1.0/applications/app-obj-1/federatedIdentityCredentials",
+      "query": "",
+      "status": 200,
+      "body": "{\"value\": [{\"name\": \"gh-main\", \"issuer\": \"https://token.actions.githubusercontent.com\", \"subject\": \"repo:acme/widgets:ref:refs/heads/main\", \"audiences\": [\"api://AzureADTokenExchange\"]}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v1.0/applications/app-obj-2/federatedIdentityCredentials",
+      "query": "",
+      "status": 200,
+      "body": "{\"value\": [{\"name\": \"google\", \"issuer\": \"https://accounts.google.com\", \"subject\": \"123\", \"audiences\": [\"api://AzureADTokenExchange\"]}]}"
+    }
+  ]
+}

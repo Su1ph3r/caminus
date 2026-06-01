@@ -3,6 +3,52 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] — 2026-06-01
+
+Milestone **M2.5**: multi-platform enumeration and multi-cloud blast radius. The
+trust graph now crosses GitLab as well as GitHub, and the OIDC→cloud resolver
+covers AWS, GCP, and Azure.
+
+### Added — GitLab enumeration (`enum --platform gitlab`)
+- New `internal/platform/gitlab`: a zero-dependency, read-only GitLab REST (v4)
+  client and enumerator that mirrors the GitHub one. It walks a group (or a
+  single project) into the trust graph — projects, the `.gitlab-ci.yml` pipeline
+  (parsed and run through the existing GitLab rule set to mark **entry points**),
+  instance/group/project **runners**, project + group **CI/CD variables**, and
+  **`id_tokens:` OIDC** usage with the instance issuer and representative subject.
+- Same defenses as the GitHub client: the token (PRIVATE-TOKEN) is attached only
+  to the configured host, RFC 5988 pagination is followed, off-host next/redirect
+  URLs are refused, and transport failures mark nodes `enum_incomplete`.
+- Self-managed GitLab is supported via `--base-url` (host root or `…/api/v4`).
+- The `graph` stage synthesizes ranked attack paths over GitLab graphs unchanged
+  (pipeline → project → runner / variable / OIDC), MITRE-tagged.
+
+### Added — GCP & Azure cloud read (`cloud --provider gcp|azure`)
+- `--provider` selects the cloud to resolve (default `aws`); `--project` supplies
+  the GCP project id.
+- **GCP** (`internal/cloud/gcp.go`, `-tags cloud`): reads Workload Identity
+  Federation via the IAM API — finds pools whose provider trusts the GitHub
+  issuer, then maps each service account's `workloadIdentityUser` /
+  `serviceAccountTokenCreator` bindings (`attribute.repository`,
+  `attribute.repository_owner`, `subject`, whole-pool) to the GitHub subjects
+  they admit. The member parser (`gcp_member.go`) is pure, always-compiled, and
+  unit-tested; unmappable custom attributes are logged and skipped (no guessing).
+- **Azure** (`internal/cloud/azure.go`, `-tags cloud`): reads Entra app-
+  registration federated identity credentials via Microsoft Graph (azcore +
+  azidentity), keeping those whose issuer is the GitHub Actions issuer and mapping
+  the FIC subject directly.
+- The trust model is now provider-neutral (`GitHubTrust.Provider`); CAM-OIDC-002
+  text adapts per cloud (AWS role / GCP service account / Azure app registration,
+  with the right credential-exchange call).
+- Record/replay cassettes drive the **real** GCP and Azure SDKs in CI with no
+  cloud account, matching the existing AWS harness.
+
+### Dependency containment
+- The default build still links **zero** cloud SDKs (`scan`/`enum`/`graph` and
+  the GitLab client are stdlib-only). GCP and Azure SDKs are isolated behind
+  `-tags cloud` alongside AWS; the un-tagged `cloud` command degrades to a
+  rebuild hint.
+
 ## [0.2.0] — 2026-06-01
 
 First tagged release. Adds the full M2 capability set on top of the M1 static

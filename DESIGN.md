@@ -152,7 +152,16 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   policies **directly via the AWS SDK** (the security-critical trust matching is
   dependency-free and unit-tested; the SDK fetch is isolated behind the `cloud`
   build tag so the default binary links nothing third-party).
-- *M2.5:* GitLab enum, GCP/Azure cloud read, role→resource blast radius.
+**M2.5 — multi-platform enum & multi-cloud blast radius. ✅**
+- `internal/platform/gitlab` read-only client (stdlib http): groups/projects,
+  `.gitlab-ci.yml` (→ GitLab rules → entry points), runners, CI/CD variables,
+  `id_tokens:` OIDC; same host-gated token / pagination / `enum_incomplete`
+  discipline as GitHub. `enum --platform gitlab`; self-managed via `--base-url`.
+- `cloud --provider gcp|azure` (alongside aws). GCP reads Workload Identity
+  Federation (pools/providers + SA IAM bindings); Azure reads app-registration
+  federated identity credentials via Graph. Provider-neutral trust model; both
+  SDKs isolated behind `-tags cloud`, default binary still links nothing
+  third-party. Real-SDK record/replay tests, no cloud account needed.
 
 **M3 — dynamic confirmation.**
 - `exploit` generates the concrete artifact (malicious-PR diff / workflow

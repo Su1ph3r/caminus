@@ -12,9 +12,57 @@ import (
 	"github.com/Su1ph3r/caminus/internal/model"
 	"github.com/Su1ph3r/caminus/internal/platform"
 	gh "github.com/Su1ph3r/caminus/internal/platform/github"
+	gl "github.com/Su1ph3r/caminus/internal/platform/gitlab"
 	"github.com/Su1ph3r/caminus/internal/reporter"
 	"github.com/Su1ph3r/caminus/internal/vcr"
 )
+
+// enumProvider is the read-only enumeration contract both platform clients
+// satisfy, letting the command dispatch over GitHub and GitLab uniformly.
+type enumProvider interface {
+	Enumerate(context.Context, platform.Credentials, platform.Target, *model.Graph) error
+}
+
+// buildProvider constructs the platform enumerator and the target to walk. On a
+// usage error it prints a message and returns a nil provider plus the exit code.
+func buildProvider(plat, org, repo string, creds platform.Credentials, hc *http.Client, logf func(string, ...any)) (enumProvider, platform.Target, int) {
+	switch plat {
+	case "github":
+		owner, name := org, repo
+		if strings.Contains(repo, "/") {
+			parts := strings.SplitN(repo, "/", 2)
+			owner, name = parts[0], parts[1]
+		}
+		if owner == "" {
+			fmt.Fprintln(os.Stderr, "caminus enum: --org (owner) is required for github")
+			return nil, platform.Target{}, 2
+		}
+		e := gh.New(gh.NewClient(creds, hc))
+		e.Logf = logf
+		return e, platform.Target{Org: owner, Repo: name}, 0
+	case "gitlab":
+		group, project := org, repo
+		// A bare project name with --group is qualified into a full path; an
+		// explicit "group/project" in --repo is used as-is.
+		if project != "" && !strings.Contains(project, "/") && group != "" {
+			project = group + "/" + project
+		}
+		if group == "" && project == "" {
+			fmt.Fprintln(os.Stderr, "caminus enum: --org (group) or --repo (group/project) is required for gitlab")
+			return nil, platform.Target{}, 2
+		}
+		e := gl.New(gl.NewClient(creds, hc))
+		e.Logf = logf
+		// A single project target leaves Org empty so enumeration scopes to it;
+		// otherwise enumerate the whole group.
+		if project != "" {
+			return e, platform.Target{Repo: project}, 0
+		}
+		return e, platform.Target{Org: group}, 0
+	}
+	fmt.Fprintf(os.Stderr, "caminus enum: unknown platform %q\n", plat)
+	return nil, platform.Target{}, 2
+}
 
 // runEnum performs read-only authenticated enumeration of a provider into the
 // trust graph (M2, Task 1: GitHub). It emits a graph.json the `graph` stage
@@ -22,10 +70,10 @@ import (
 func runEnum(argv []string) int {
 	fs := flag.NewFlagSet("enum", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	plat := fs.String("platform", "github", "provider: github (gitlab in M2.5)")
-	org := fs.String("org", "", "organization / owner to enumerate")
-	repo := fs.String("repo", "", "single repo: \"owner/name\" or just \"name\" with --org")
-	baseURL := fs.String("base-url", "", "API base URL for GitHub Enterprise (…/api/v3)")
+	plat := fs.String("platform", "github", "provider: github or gitlab")
+	org := fs.String("org", "", "GitHub org/owner, or GitLab group, to enumerate")
+	repo := fs.String("repo", "", "single repo/project: \"owner/name\" (or \"name\" with --org)")
+	baseURL := fs.String("base-url", "", "API base URL for self-managed (GHE …/api/v3, GitLab host root)")
 	token := fs.String("token", "", "access token (or set CAMINUS_TOKEN)")
 	out := fs.String("o", "graph.json", "trust-graph output file (\"-\" for stdout)")
 	replay := fs.String("replay", "", "replay API responses from a cassette (no token needed)")
@@ -38,22 +86,8 @@ func runEnum(argv []string) int {
 		return 2
 	}
 
-	if *plat == "gitlab" {
-		fmt.Fprintln(os.Stderr, "caminus enum: GitLab enumeration arrives in M2.5; use --platform github")
-		return 3
-	}
-	if *plat != "github" {
-		fmt.Fprintf(os.Stderr, "caminus enum: unknown platform %q\n", *plat)
-		return 2
-	}
-
-	owner, name := *org, *repo
-	if strings.Contains(*repo, "/") {
-		parts := strings.SplitN(*repo, "/", 2)
-		owner, name = parts[0], parts[1]
-	}
-	if owner == "" {
-		fmt.Fprintln(os.Stderr, "caminus enum: --org (owner) is required")
+	if *plat != "github" && *plat != "gitlab" {
+		fmt.Fprintf(os.Stderr, "caminus enum: unknown platform %q (want github or gitlab)\n", *plat)
 		return 2
 	}
 
@@ -89,12 +123,15 @@ func runEnum(argv []string) int {
 	}
 
 	creds := platform.Credentials{Token: tok, BaseURL: *baseURL}
-	client := gh.NewClient(creds, hc)
-	enum := gh.New(client)
-	enum.Logf = func(format string, a ...any) { fmt.Fprintf(os.Stderr, "  "+format+"\n", a...) }
+	logf := func(format string, a ...any) { fmt.Fprintf(os.Stderr, "  "+format+"\n", a...) }
+
+	prov, target, code := buildProvider(*plat, *org, *repo, creds, hc, logf)
+	if prov == nil {
+		return code
+	}
 
 	g := model.NewGraph()
-	if err := enum.Enumerate(context.Background(), creds, platform.Target{Org: owner, Repo: name}, g); err != nil {
+	if err := prov.Enumerate(context.Background(), creds, target, g); err != nil {
 		fmt.Fprintf(os.Stderr, "caminus enum: %v\n", err)
 		return 2
 	}

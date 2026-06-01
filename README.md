@@ -11,13 +11,13 @@ primitives it finds, not just flag YAML patterns.
 into shipped artifacts, and where the supply chain breaks.
 
 Single binary, dependency-free core. Linux, macOS, Windows. (Cloud
-enumeration — `caminus cloud` — uses the official AWS SDK and is built only
-with `-tags cloud`; the default build links no third-party packages.)
+enumeration — `caminus cloud` — uses the official AWS / GCP / Azure SDKs and is
+built only with `-tags cloud`; the default build links no third-party packages.)
 
-> **Status:** `scan` (GitHub Actions + GitLab CI), `enum`, `graph`, and `cloud`
-> (AWS OIDC blast-radius) are all working. `exploit` (dynamic confirmation) is
-> the next milestone. See [`DESIGN.md`](./DESIGN.md) §Roadmap and
-> [`PLAN.md`](./PLAN.md).
+> **Status:** `scan` (GitHub Actions + GitLab CI), `enum` (GitHub **and**
+> GitLab), `graph`, and `cloud` (AWS, GCP, Azure OIDC blast-radius) are all
+> working. `exploit` (dynamic confirmation) is the next milestone. See
+> [`DESIGN.md`](./DESIGN.md) §Roadmap and [`PLAN.md`](./PLAN.md).
 
 ---
 
@@ -39,7 +39,7 @@ go build -o caminus ./cmd/caminus
 # or
 go install github.com/Su1ph3r/caminus/cmd/caminus@latest
 
-# With AWS cloud blast-radius support (adds the AWS SDK):
+# With cloud blast-radius support (AWS / GCP / Azure SDKs):
 go build -tags cloud -o caminus ./cmd/caminus
 ```
 
@@ -66,18 +66,24 @@ caminus scan . --gate none          # never fail the build
 ### Trust graph & attack paths (token required)
 
 ```bash
-# 1. Enumerate a GitHub org/repo into a trust graph (or --replay a cassette)
-caminus enum --org acme --token $CAMINUS_TOKEN -o graph.json
+# 1. Enumerate into a trust graph (or --replay a cassette). Pick a platform:
+caminus enum --platform github --org acme --token $CAMINUS_TOKEN -o graph.json
+caminus enum --platform gitlab --org acme --token $CAMINUS_TOKEN -o graph.json
+#   self-managed GitLab / GitHub Enterprise: add --base-url
+#   single project/repo: --repo acme/widgets
 
-# 2. Resolve the OIDC→AWS blast radius (needs a -tags cloud build + AWS creds)
-caminus cloud -i graph.json            # enriches graph.json in place
+# 2. Resolve the OIDC→cloud blast radius (needs a -tags cloud build + cloud creds)
+caminus cloud -i graph.json --provider aws                     # enriches in place
+caminus cloud -i graph.json --provider gcp --project my-proj
+caminus cloud -i graph.json --provider azure
 
 # 3. Synthesize ranked, MITRE-tagged attack paths
 caminus graph -i graph.json --min-severity high
 ```
 
-This surfaces chains like *poisoned pipeline → OIDC federation → assumable AWS
-role* (`CAM-OIDC-002`), plus paths to self-hosted runners and CI secrets.
+This surfaces chains like *poisoned pipeline → OIDC federation → assumable cloud
+identity* (`CAM-OIDC-002`: an AWS role, GCP service account, or Azure app), plus
+paths to self-hosted runners and CI secrets — for both GitHub and GitLab graphs.
 
 Exit codes: `0` clean · `1` finding at/above the gate (default `high`) ·
 `2` usage/error · `3` capability not yet implemented.

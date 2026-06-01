@@ -1,0 +1,39 @@
+{
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/v1/projects/myproj/locations/global/workloadIdentityPools",
+      "query": "alt=json&prettyPrint=false",
+      "status": 200,
+      "body": "{\"workloadIdentityPools\": [{\"name\": \"projects/myproj/locations/global/workloadIdentityPools/github-pool\", \"state\": \"ACTIVE\", \"disabled\": false, \"displayName\": \"github\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/myproj/locations/global/workloadIdentityPools/github-pool/providers",
+      "query": "alt=json&prettyPrint=false",
+      "status": 200,
+      "body": "{\"workloadIdentityPoolProviders\": [{\"name\": \"projects/myproj/locations/global/workloadIdentityPools/github-pool/providers/gh\", \"disabled\": false, \"oidc\": {\"issuerUri\": \"https://token.actions.githubusercontent.com\", \"allowedAudiences\": [\"sts.googleapis.com\"]}}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/myproj/serviceAccounts",
+      "query": "alt=json&prettyPrint=false",
+      "status": 200,
+      "body": "{\"accounts\": [{\"name\": \"projects/myproj/serviceAccounts/deployer@myproj.iam.gserviceaccount.com\", \"email\": \"deployer@myproj.iam.gserviceaccount.com\", \"displayName\": \"deployer\"}, {\"name\": \"projects/myproj/serviceAccounts/readonly@myproj.iam.gserviceaccount.com\", \"email\": \"readonly@myproj.iam.gserviceaccount.com\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/myproj/serviceAccounts/deployer@myproj.iam.gserviceaccount.com:getIamPolicy",
+      "query": "alt=json&prettyPrint=false",
+      "status": 200,
+      "body": "{\"bindings\": [{\"role\": \"roles/iam.workloadIdentityUser\", \"members\": [\"principalSet://iam.googleapis.com/projects/myproj/locations/global/workloadIdentityPools/github-pool/attribute.repository/acme/widgets\"]}, {\"role\": \"roles/viewer\", \"members\": [\"user:someone@example.com\"]}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/myproj/serviceAccounts/readonly@myproj.iam.gserviceaccount.com:getIamPolicy",
+      "query": "alt=json&prettyPrint=false",
+      "status": 200,
+      "body": "{\"bindings\": [{\"role\": \"roles/iam.serviceAccountTokenCreator\", \"members\": [\"principal://iam.googleapis.com/projects/myproj/locations/global/workloadIdentityPools/github-pool/subject/repo:acme/widgets:ref:refs/heads/main\"]}]}"
+    }
+  ]
+}

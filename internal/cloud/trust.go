@@ -21,15 +21,42 @@ import (
 // for these federations are prefixed with it (e.g. "<issuer>:sub").
 const GitHubOIDCIssuer = "token.actions.githubusercontent.com"
 
-// GitHubTrust is a parsed GitHub-OIDC federation granted by an IAM role's
-// AssumeRolePolicyDocument.
+// GitHubTrust is a parsed GitHub-OIDC federation granted by a cloud identity.
+// It is provider-neutral: the same subject-matching logic applies whether the
+// federation is an AWS IAM role trust policy, a GCP Workload Identity Federation
+// binding, or an Azure app-registration federated credential — they all admit a
+// GitHub Actions OIDC subject. The Role* fields name the assumable resource in
+// provider-appropriate terms (see ResourceID/ResourceNoun).
 type GitHubTrust struct {
-	RoleARN     string   `json:"role_arn"`
-	RoleName    string   `json:"role_name"`
-	Account     string   `json:"account"`
+	Provider    string   `json:"provider"`     // aws | gcp | azure (empty defaults to aws)
+	RoleARN     string   `json:"role_arn"`     // unique resource id: ARN / SA email / app credential
+	RoleName    string   `json:"role_name"`    // human label: role name / SA email / app display name
+	Account     string   `json:"account"`      // AWS account / GCP project / Azure tenant
 	SubPatterns []string `json:"sub_patterns"` // :sub condition values (empty = no sub condition!)
 	Audiences   []string `json:"audiences"`    // :aud condition values
 	HasSub      bool     `json:"has_sub"`
+}
+
+// ProviderNoun returns a human-readable name for the assumable resource kind,
+// used in finding text so a CAM-OIDC-002 reads naturally for each cloud.
+func (t GitHubTrust) ProviderNoun() string {
+	switch t.Provider {
+	case "gcp":
+		return "GCP service account"
+	case "azure":
+		return "Azure app registration"
+	default:
+		return "AWS role"
+	}
+}
+
+// ProviderName returns the canonical provider identifier, defaulting to aws for
+// trusts produced before the provider field existed (AWS IAM parser).
+func (t GitHubTrust) ProviderName() string {
+	if t.Provider == "" {
+		return "aws"
+	}
+	return t.Provider
 }
 
 // Broadness classifies how permissive a federation is.
@@ -205,7 +232,7 @@ func ParseTrustPolicy(roleARN, roleName, account, doc string) ([]GitHubTrust, er
 		if err != nil || !federatesGitHub(feds) {
 			continue
 		}
-		t := GitHubTrust{RoleARN: roleARN, RoleName: roleName, Account: account}
+		t := GitHubTrust{Provider: "aws", RoleARN: roleARN, RoleName: roleName, Account: account}
 		subKey := GitHubOIDCIssuer + ":sub"
 		audKey := GitHubOIDCIssuer + ":aud"
 		for _, vals := range s.Condition { // StringEquals / StringLike / …

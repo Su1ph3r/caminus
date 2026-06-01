@@ -1,0 +1,53 @@
+{
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/v4/groups/acme/projects",
+      "query": "include_subgroups=true&per_page=100&with_shared=false",
+      "status": 200,
+      "body": "[{\"id\": 42, \"path_with_namespace\": \"acme/widgets\", \"default_branch\": \"main\", \"visibility\": \"private\", \"ci_config_path\": \"\"}]"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v4/projects/42/repository/files/.gitlab-ci.yml",
+      "query": "per_page=100&ref=main",
+      "status": 200,
+      "body": "{\"content\": \"ZGVwbG95OgogIHJ1bGVzOgogICAgLSBpZjogJyRDSV9QSVBFTElORV9TT1VSQ0UgPT0gIm1lcmdlX3JlcXVlc3RfZXZlbnQiJwogIGlkX3Rva2VuczoKICAgIEFXU19UT0tFTjoKICAgICAgYXVkOiBodHRwczovL2dpdGxhYi5jb20KICBzY3JpcHQ6CiAgICAtIGVjaG8gImJ1aWxkaW5nICR7Q0lfQ09NTUlUX01FU1NBR0V9IgogICAgLSAuL2RlcGxveS5zaAo=\", \"encoding\": \"base64\", \"file_path\": \".gitlab-ci.yml\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v4/projects/42/runners",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "[{\"id\": 7, \"description\": \"build-shell\", \"name\": \"build-shell\", \"active\": true, \"paused\": false, \"is_shared\": false, \"runner_type\": \"project_type\", \"status\": \"online\"}]"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v4/projects/42/variables",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "[{\"key\": \"DEPLOY_TOKEN\", \"variable_type\": \"env_var\", \"protected\": true, \"masked\": true, \"environment_scope\": \"*\"}]"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v4/projects/42/protected_branches",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "[{\"name\": \"main\"}]"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v4/groups/acme/runners",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "[]"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v4/groups/acme/variables",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "[{\"key\": \"GROUP_NPM_TOKEN\", \"variable_type\": \"env_var\", \"protected\": false, \"masked\": true, \"environment_scope\": \"*\"}]"
+    }
+  ]
+}

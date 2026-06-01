@@ -14,10 +14,12 @@ import (
 // regardless of build tags.
 var ErrNotBuilt = errors.New("cloud support not built in; rebuild with: go build -tags cloud")
 
-// Options configures cloud enumeration.
+// Options configures cloud enumeration. Field applicability varies by provider:
+// Region/Profile are AWS; Project is GCP; Azure derives tenant from credentials.
 type Options struct {
 	Region  string
 	Profile string
+	Project string // GCP project id whose Workload Identity federation to read
 
 	// Transport, when set, replaces the AWS SDK's HTTP transport — used to
 	// record or replay IAM responses (the cloud build honors it; the stub
@@ -69,7 +71,7 @@ func Enrich(ctx context.Context, g *model.Graph, fetch FetchFunc, opts Options) 
 				Label: t.RoleName,
 				Kind:  model.NodeCloudRole,
 				Attrs: map[string]string{
-					"provider":     "aws",
+					"provider":     t.ProviderName(),
 					"account":      t.Account,
 					"broadness":    t.Broadness().String(),
 					"sub_patterns": strings.Join(t.SubPatterns, " | "),
@@ -178,23 +180,32 @@ func oidc002(ri *repoInfo, t GitHubTrust) model.Finding {
 	if t.Broadness() >= TrustRepoWildcard {
 		sev = model.SevCritical
 	}
+	noun := t.ProviderNoun()
+	exchange := map[string]string{
+		"aws":   "call sts:AssumeRoleWithWebIdentity",
+		"gcp":   "exchange it for a service-account access token via STS + IAM Credentials",
+		"azure": "exchange it for an Entra ID access token (client-assertion grant)",
+	}[t.ProviderName()]
+	if exchange == "" {
+		exchange = "exchange it for cloud credentials"
+	}
 	return model.Finding{
 		RuleID:   "CAM-OIDC-002",
-		Title:    "Attacker-controllable pipeline can assume cloud role " + t.RoleName,
+		Title:    "Attacker-controllable pipeline can assume " + noun + " " + t.RoleName,
 		Severity: sev,
 		Category: model.CatOIDC,
 		File:     ri.full,
-		Evidence: "role " + t.RoleARN + " trust=" + t.Broadness().String() + " sub=" + strings.Join(t.SubPatterns, " | "),
+		Evidence: noun + " " + t.RoleARN + " trust=" + t.Broadness().String() + " sub=" + strings.Join(t.SubPatterns, " | "),
 		Description: "Repository " + ri.full + " has an attacker-controllable pipeline (entry point) and " +
-			"federates to AWS role " + t.RoleARN + ", whose trust policy (" + t.Broadness().String() + ") admits " +
+			"federates to " + noun + " " + t.RoleARN + ", whose trust (" + t.Broadness().String() + ") admits " +
 			"a subject this repository's runs can present. A poisoned pipeline can mint a GitHub OIDC token, " +
-			"call sts:AssumeRoleWithWebIdentity, and obtain that role's permissions in account " + t.Account + ".",
-		Remediation: "Constrain the role's trust sub condition to specific protected branches/environments " +
+			exchange + ", and obtain that identity's permissions in " + t.ProviderName() + " account " + t.Account + ".",
+		Remediation: "Constrain the trust's sub condition to specific protected branches/environments " +
 			"(no repo-wide or ref wildcards), require the aud condition, and remove the pipeline's " +
 			"attacker-controllable trigger or isolate privileged jobs.",
 		Confirmable: true,
 		References: []string{
-			"https://docs.github.com/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services",
+			"https://docs.github.com/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect",
 			"https://owasp.org/www-project-top-10-ci-cd-security-risks/ (CICD-SEC-6)",
 		},
 	}
