@@ -67,6 +67,17 @@ func TestNonGitHubFederationIgnored(t *testing.T) {
 	}
 }
 
+func TestMalformedSubConditionIsError(t *testing.T) {
+	// A :sub value that is neither a string nor a string array (here, an object)
+	// must produce an error — never be silently dropped, which would misclassify
+	// the trust as "no subject condition" (the most permissive class).
+	_, err := ParseTrustPolicy("arn:aws:iam::1:role/x", "x", "1",
+		policy(`{"unexpected":"object"}`, ""))
+	if err == nil {
+		t.Fatal("expected an error for a malformed :sub condition, got nil")
+	}
+}
+
 func TestSubjectMatches(t *testing.T) {
 	cases := []struct {
 		pattern, subject string

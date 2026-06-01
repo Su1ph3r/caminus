@@ -11,8 +11,10 @@ package cloud
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // GitHubOIDCIssuer is the GitHub Actions OIDC issuer host. IAM condition keys
@@ -92,9 +94,24 @@ func classifyPattern(p string) Broadness {
 	return TrustScoped
 }
 
-// SubjectMatches reports whether an IAM StringLike/StringEquals condition
-// pattern (glob with '*' and '?') matches a concrete OIDC subject.
-func SubjectMatches(pattern, subject string) bool {
+// globCache memoizes the compiled regexp for each distinct IAM condition
+// pattern. Matching runs in an O(roles × repos × patterns × subjects) loop, so
+// compiling a pattern once (rather than per subject) matters on real accounts.
+var (
+	globCacheMu sync.Mutex
+	globCache   = map[string]*regexp.Regexp{}
+)
+
+// compileGlob translates an IAM StringLike/StringEquals pattern (glob with '*'
+// and '?') into an anchored regexp, caching the result. A nil entry is cached
+// for un-compilable patterns so they are not retried. RE2 (Go's regexp) is
+// linear-time, so this is not subject to catastrophic backtracking.
+func compileGlob(pattern string) *regexp.Regexp {
+	globCacheMu.Lock()
+	defer globCacheMu.Unlock()
+	if re, ok := globCache[pattern]; ok {
+		return re
+	}
 	var b strings.Builder
 	b.WriteByte('^')
 	for _, r := range pattern {
@@ -110,6 +127,17 @@ func SubjectMatches(pattern, subject string) bool {
 	b.WriteByte('$')
 	re, err := regexp.Compile(b.String())
 	if err != nil {
+		re = nil
+	}
+	globCache[pattern] = re
+	return re
+}
+
+// SubjectMatches reports whether an IAM StringLike/StringEquals condition
+// pattern (glob with '*' and '?') matches a concrete OIDC subject.
+func SubjectMatches(pattern, subject string) bool {
+	re := compileGlob(pattern)
+	if re == nil {
 		return false
 	}
 	return re.MatchString(subject)
@@ -122,8 +150,12 @@ func (t GitHubTrust) Assumable(candidateSubjects []string) bool {
 		return true // no :sub condition — any federated repo qualifies
 	}
 	for _, p := range t.SubPatterns {
+		re := compileGlob(p)
+		if re == nil {
+			continue
+		}
 		for _, s := range candidateSubjects {
-			if SubjectMatches(p, s) {
+			if re.MatchString(s) {
 				return true
 			}
 		}
@@ -163,21 +195,38 @@ func ParseTrustPolicy(roleARN, roleName, account, doc string) ([]GitHubTrust, er
 		if !strings.EqualFold(s.Effect, "Allow") {
 			continue
 		}
-		if !containsFold(flexStrings(s.Action), "sts:AssumeRoleWithWebIdentity") {
+		// A statement whose Action or Principal can't be decoded is one we
+		// can't evaluate — skip it rather than guess.
+		actions, err := flexStrings(s.Action)
+		if err != nil || !containsFold(actions, "sts:AssumeRoleWithWebIdentity") {
 			continue
 		}
-		if !federatesGitHub(flexStrings(s.Principal.Federated)) {
+		feds, err := flexStrings(s.Principal.Federated)
+		if err != nil || !federatesGitHub(feds) {
 			continue
 		}
 		t := GitHubTrust{RoleARN: roleARN, RoleName: roleName, Account: account}
 		subKey := GitHubOIDCIssuer + ":sub"
 		audKey := GitHubOIDCIssuer + ":aud"
 		for _, vals := range s.Condition { // StringEquals / StringLike / …
+			// A present-but-unparsable :sub/:aud is a hard error: silently
+			// dropping it would make HasSub=false and misclassify the trust as
+			// "no subject condition" — the most permissive class — purely
+			// because of a decode failure. Fail loudly so the caller skips the
+			// role with a logged reason instead.
 			if raw, ok := vals[subKey]; ok {
-				t.SubPatterns = append(t.SubPatterns, flexStrings(raw)...)
+				vs, err := flexStrings(raw)
+				if err != nil {
+					return nil, fmt.Errorf("github trust :sub condition for %s: %w", roleARN, err)
+				}
+				t.SubPatterns = append(t.SubPatterns, vs...)
 			}
 			if raw, ok := vals[audKey]; ok {
-				t.Audiences = append(t.Audiences, flexStrings(raw)...)
+				vs, err := flexStrings(raw)
+				if err != nil {
+					return nil, fmt.Errorf("github trust :aud condition for %s: %w", roleARN, err)
+				}
+				t.Audiences = append(t.Audiences, vs...)
 			}
 		}
 		t.HasSub = len(t.SubPatterns) > 0
@@ -204,20 +253,24 @@ func decodeStatements(raw json.RawMessage) ([]statement, error) {
 }
 
 // flexStrings decodes a JSON value that may be a string or an array of strings.
-func flexStrings(raw json.RawMessage) []string {
+// A decode failure is returned, not swallowed, so callers can distinguish
+// "absent" from "present but malformed".
+func flexStrings(raw json.RawMessage) ([]string, error) {
 	if len(raw) == 0 {
-		return nil
+		return nil, nil
 	}
 	if strings.HasPrefix(strings.TrimSpace(string(raw)), "[") {
 		var arr []string
-		_ = json.Unmarshal(raw, &arr)
-		return arr
+		if err := json.Unmarshal(raw, &arr); err != nil {
+			return nil, err
+		}
+		return arr, nil
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil {
-		return nil
+		return nil, err
 	}
-	return []string{s}
+	return []string{s}, nil
 }
 
 func federatesGitHub(principals []string) bool {

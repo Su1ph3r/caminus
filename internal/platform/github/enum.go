@@ -51,24 +51,39 @@ type contentResp struct {
 	Encoding string `json:"encoding"`
 }
 
+type ghLabel struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type ghRunner struct {
+	ID     int       `json:"id"`
+	Name   string    `json:"name"`
+	OS     string    `json:"os"`
+	Status string    `json:"status"`
+	Labels []ghLabel `json:"labels"`
+}
+
 type runnerList struct {
-	Runners []struct {
-		ID     int    `json:"id"`
-		Name   string `json:"name"`
-		OS     string `json:"os"`
-		Status string `json:"status"`
-		Labels []struct {
-			Name string `json:"name"`
-			Type string `json:"type"`
-		} `json:"labels"`
-	} `json:"runners"`
+	Runners []ghRunner `json:"runners"`
+}
+
+type ghSecret struct {
+	Name       string `json:"name"`
+	Visibility string `json:"visibility"`
 }
 
 type secretList struct {
-	Secrets []struct {
-		Name       string `json:"name"`
-		Visibility string `json:"visibility"`
-	} `json:"secrets"`
+	Secrets []ghSecret `json:"secrets"`
+}
+
+type ghEnvironment struct {
+	Name            string            `json:"name"`
+	ProtectionRules []json.RawMessage `json:"protection_rules"`
+}
+
+type envList struct {
+	Environments []ghEnvironment `json:"environments"`
 }
 
 type oidcSub struct {
@@ -93,7 +108,7 @@ func (e *Enumerator) Enumerate(ctx context.Context, _ platform.Credentials, t pl
 	e.Logf("enumerating %d repo(s) under %s", len(repos), t.Org)
 
 	for _, r := range repos {
-		e.enumerateRepo(ctx, t.Org, r, g)
+		e.enumerateRepo(ctx, r, g)
 		g.AddEdge(orgID, "gh:repo:"+r.FullName, model.EdgeContains)
 	}
 
@@ -126,7 +141,7 @@ func (e *Enumerator) listRepos(ctx context.Context, t platform.Target) ([]repo, 
 	return out, err
 }
 
-func (e *Enumerator) enumerateRepo(ctx context.Context, owner string, r repo, g *model.Graph) {
+func (e *Enumerator) enumerateRepo(ctx context.Context, r repo, g *model.Graph) {
 	repoID := "gh:repo:" + r.FullName
 	attrs := map[string]string{
 		"private":        strconv.FormatBool(r.Private),
@@ -139,6 +154,7 @@ func (e *Enumerator) enumerateRepo(ctx context.Context, owner string, r repo, g 
 	e.enumerateRepoSecrets(ctx, r, repoID, g)
 	e.enumerateOIDC(ctx, r, repoID, g)
 	e.enumerateBranchProtection(ctx, r, repoNode)
+	e.enumerateEnvironments(ctx, r, repoNode)
 }
 
 func (e *Enumerator) enumerateWorkflows(ctx context.Context, r repo, repoID string, g *model.Graph) {
@@ -149,23 +165,26 @@ func (e *Enumerator) enumerateWorkflows(ctx context.Context, r repo, repoID stri
 	}
 	for _, w := range wl.Workflows {
 		pipeID := "gh:pipeline:" + r.FullName + ":" + w.Path
-		attrs := map[string]string{"path": w.Path, "state": w.State}
+		attrs := map[string]string{"path": w.Path, "state": w.State, "entrypoint": "false"}
 
 		if src, ok := e.fetchContent(ctx, r.FullName, w.Path); ok {
 			doc := workflow.Parse(w.Path, src)
 			attrs["triggers"] = strings.Join(doc.Triggers(), ",")
 			findings := rules.Run(doc, rules.Default())
-			entry, maxRank := false, 0
+			entry := false
 			for _, f := range findings {
 				if f.Confirmable {
 					entry = true
 				}
-				if f.Severity.Rank() > maxRank {
-					maxRank = f.Severity.Rank()
-				}
 			}
 			attrs["findings"] = strconv.Itoa(len(findings))
 			attrs["entrypoint"] = strconv.FormatBool(entry)
+		} else {
+			// The workflow YAML could not be read (commonly: the token can list
+			// workflows but lacks `contents` scope). The pipeline is UNASSESSED,
+			// not benign — mark it so downstream synthesis/reporting can flag it
+			// rather than silently treating it as having no risky triggers.
+			attrs["content_unavailable"] = "true"
 		}
 		g.AddNodeOnce(&model.Node{ID: pipeID, Label: w.Name, Kind: model.NodePipeline, Attrs: attrs})
 		g.AddEdge(repoID, pipeID, model.EdgeContains)
@@ -183,31 +202,60 @@ func (e *Enumerator) fetchContent(ctx context.Context, fullName, path string) ([
 	}
 	dec, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(cr.Content, "\n", ""))
 	if err != nil {
+		e.skip("workflow content decode", fullName+"/"+path, err)
 		return nil, false
 	}
 	return dec, true
 }
 
+// listRunners fetches every page of a runners endpoint.
+func (e *Enumerator) listRunners(ctx context.Context, path string) ([]ghRunner, error) {
+	var out []ghRunner
+	err := e.c.getList(ctx, path, func(b []byte) error {
+		var rl runnerList
+		if err := json.Unmarshal(b, &rl); err != nil {
+			return err
+		}
+		out = append(out, rl.Runners...)
+		return nil
+	})
+	return out, err
+}
+
+// listSecrets fetches every page of a secrets endpoint.
+func (e *Enumerator) listSecrets(ctx context.Context, path string) ([]ghSecret, error) {
+	var out []ghSecret
+	err := e.c.getList(ctx, path, func(b []byte) error {
+		var sl secretList
+		if err := json.Unmarshal(b, &sl); err != nil {
+			return err
+		}
+		out = append(out, sl.Secrets...)
+		return nil
+	})
+	return out, err
+}
+
 func (e *Enumerator) enumerateRepoRunners(ctx context.Context, r repo, repoID string, g *model.Graph) {
-	var rl runnerList
-	if err := e.c.getJSON(ctx, "/repos/"+r.FullName+"/actions/runners", &rl); err != nil {
+	runners, err := e.listRunners(ctx, "/repos/"+r.FullName+"/actions/runners")
+	if err != nil {
 		e.skip("repo runners", r.FullName, err)
 		return
 	}
-	e.addRunners(rl, "repo:"+r.FullName, repoID, g)
+	e.addRunners(runners, "repo:"+r.FullName, repoID, g)
 }
 
 func (e *Enumerator) enumerateOrgRunners(ctx context.Context, org string, g *model.Graph) {
-	var rl runnerList
-	if err := e.c.getJSON(ctx, "/orgs/"+org+"/actions/runners", &rl); err != nil {
+	runners, err := e.listRunners(ctx, "/orgs/"+org+"/actions/runners")
+	if err != nil {
 		e.skip("org runners", org, err)
 		return
 	}
-	e.addRunners(rl, "org:"+org, "gh:org:"+org, g)
+	e.addRunners(runners, "org:"+org, "gh:org:"+org, g)
 }
 
-func (e *Enumerator) addRunners(rl runnerList, scope, ownerID string, g *model.Graph) {
-	for _, rn := range rl.Runners {
+func (e *Enumerator) addRunners(runners []ghRunner, scope, ownerID string, g *model.Graph) {
+	for _, rn := range runners {
 		selfHosted := true
 		var labels []string
 		for _, l := range rn.Labels {
@@ -229,12 +277,12 @@ func (e *Enumerator) addRunners(rl runnerList, scope, ownerID string, g *model.G
 }
 
 func (e *Enumerator) enumerateRepoSecrets(ctx context.Context, r repo, repoID string, g *model.Graph) {
-	var sl secretList
-	if err := e.c.getJSON(ctx, "/repos/"+r.FullName+"/actions/secrets", &sl); err != nil {
+	secrets, err := e.listSecrets(ctx, "/repos/"+r.FullName+"/actions/secrets")
+	if err != nil {
 		e.skip("repo secrets", r.FullName, err)
 		return
 	}
-	for _, s := range sl.Secrets {
+	for _, s := range secrets {
 		id := "gh:secret:repo:" + r.FullName + ":" + s.Name
 		g.AddNodeOnce(&model.Node{ID: id, Label: s.Name, Kind: model.NodeSecret, Attrs: map[string]string{"scope": "repo:" + r.FullName}})
 		g.AddEdge(repoID, id, model.EdgeCanRead)
@@ -242,18 +290,52 @@ func (e *Enumerator) enumerateRepoSecrets(ctx context.Context, r repo, repoID st
 }
 
 func (e *Enumerator) enumerateOrgSecrets(ctx context.Context, org string, g *model.Graph) {
-	var sl secretList
-	if err := e.c.getJSON(ctx, "/orgs/"+org+"/actions/secrets", &sl); err != nil {
+	secrets, err := e.listSecrets(ctx, "/orgs/"+org+"/actions/secrets")
+	if err != nil {
 		e.skip("org secrets", org, err)
 		return
 	}
-	for _, s := range sl.Secrets {
+	for _, s := range secrets {
 		id := "gh:secret:org:" + org + ":" + s.Name
 		g.AddNodeOnce(&model.Node{ID: id, Label: s.Name, Kind: model.NodeSecret, Attrs: map[string]string{
 			"scope":      "org:" + org,
 			"visibility": s.Visibility,
 		}})
 		g.AddEdge("gh:org:"+org, id, model.EdgeCanRead)
+	}
+}
+
+// enumerateEnvironments records the repository's deployment environments and
+// which of them carry protection rules (required reviewers, wait timers, branch
+// policies). Protected environments are a control that makes a deployment job
+// harder to reach, so the graph notes them on the repo node.
+func (e *Enumerator) enumerateEnvironments(ctx context.Context, r repo, repoNode *model.Node) {
+	var envs []ghEnvironment
+	err := e.c.getList(ctx, "/repos/"+r.FullName+"/environments", func(b []byte) error {
+		var el envList
+		if err := json.Unmarshal(b, &el); err != nil {
+			return err
+		}
+		envs = append(envs, el.Environments...)
+		return nil
+	})
+	if err != nil {
+		e.skip("environments", r.FullName, err)
+		return
+	}
+	if len(envs) == 0 {
+		return
+	}
+	var names, protected []string
+	for _, env := range envs {
+		names = append(names, env.Name)
+		if len(env.ProtectionRules) > 0 {
+			protected = append(protected, env.Name)
+		}
+	}
+	repoNode.Attrs["environments"] = strings.Join(names, ",")
+	if len(protected) > 0 {
+		repoNode.Attrs["protected_environments"] = strings.Join(protected, ",")
 	}
 }
 

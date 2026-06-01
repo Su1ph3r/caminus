@@ -65,6 +65,24 @@ func TestSynthesizeFindsRankedPaths(t *testing.T) {
 	}
 }
 
+func TestSynthesizeToleratesDanglingNode(t *testing.T) {
+	// An edge endpoint absent from Nodes (a dangling node, e.g. from a
+	// hand-edited graph.json) on an intermediate hop must not panic.
+	g := model.NewGraph()
+	g.AddNode(&model.Node{ID: "pipe", Label: "CI", Kind: model.NodePipeline,
+		Attrs: map[string]string{"entrypoint": "true"}})
+	g.AddNode(&model.Node{ID: "secret", Label: "X", Kind: model.NodeSecret,
+		Attrs: map[string]string{"scope": "repo:x"}})
+	// "repo" is referenced by edges but never added as a node.
+	g.AddEdge("repo", "pipe", model.EdgeContains)  // child→parent: adj[pipe]=[repo]
+	g.AddEdge("repo", "secret", model.EdgeCanRead) // adj[repo]=[secret]
+
+	paths := Synthesize(g) // must not panic
+	if len(paths) == 0 {
+		t.Error("expected a path to the secret despite the dangling intermediate node")
+	}
+}
+
 func TestSynthesizeNoEntryPoints(t *testing.T) {
 	g := model.NewGraph()
 	g.AddNode(&model.Node{ID: "pipe", Label: "CI", Kind: model.NodePipeline,

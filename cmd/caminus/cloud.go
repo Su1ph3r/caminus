@@ -61,7 +61,10 @@ func runCloud(argv []string) int {
 	}
 	before := len(g.Findings)
 
-	opts := cloud.Options{Region: *region, Profile: *profile, Transport: transport, Anonymous: anonymous}
+	opts := cloud.Options{
+		Region: *region, Profile: *profile, Transport: transport, Anonymous: anonymous,
+		Logf: func(format string, a ...any) { fmt.Fprintf(os.Stderr, "  "+format+"\n", a...) },
+	}
 	bindings, err := cloud.Enrich(context.Background(), g, cloud.Fetch, opts)
 	if err != nil {
 		if errors.Is(err, cloud.ErrNotBuilt) {

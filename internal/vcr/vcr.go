@@ -126,6 +126,11 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func (t *Transport) replay(req *http.Request) (*http.Response, error) {
 	want := key(req.Method, req.URL.Path, req.URL.RawQuery, requestDiscriminator(req))
+	// Lock symmetrically with record(): http.RoundTripper permits concurrent
+	// RoundTrip calls, so guard the cassette read too. buildResponse and
+	// requestDiscriminator hold no shared state, so this never blocks on I/O.
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	for _, in := range t.cassette.Interactions {
 		if key(in.Method, in.Path, in.Query, in.Match) == want {
 			return buildResponse(req, in), nil
@@ -190,5 +195,7 @@ func (t *Transport) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(t.path, data, 0o644)
+	// 0o600: a recorded cassette captures full API response bodies (the target's
+	// repo/runner/secret-name inventory); keep it owner-readable only.
+	return os.WriteFile(t.path, data, 0o600)
 }

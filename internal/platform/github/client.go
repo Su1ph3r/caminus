@@ -83,6 +83,13 @@ func (c *Client) raw(ctx context.Context, endpoint string) (*http.Response, []by
 	case http.StatusNotFound:
 		return resp, body, ErrNotFound
 	case http.StatusForbidden, http.StatusUnauthorized:
+		// Surface rate limiting clearly (it is reported as 403 with the
+		// remaining-quota header at zero) while still wrapping ErrForbidden so
+		// callers treat it as a skippable access error.
+		if resp.Header.Get("X-RateLimit-Remaining") == "0" {
+			return resp, body, fmt.Errorf("github: rate limited (resets %s): %w",
+				resp.Header.Get("X-RateLimit-Reset"), ErrForbidden)
+		}
 		return resp, body, ErrForbidden
 	default:
 		return resp, body, fmt.Errorf("github: GET %s: status %d", endpoint, resp.StatusCode)
@@ -133,24 +140,27 @@ func addPerPage(rawURL string) string {
 	return u.String()
 }
 
-// nextLink extracts the rel="next" URL from a Link header, or "".
+// nextLink extracts the rel="next" URL from an RFC 5988 Link header, or "".
+// It parses the angle-bracketed <URL> delimiters rather than splitting on raw
+// commas, so a next URL whose query contains a literal comma is not truncated.
 func nextLink(link string) string {
-	if link == "" {
-		return ""
-	}
-	for _, part := range strings.Split(link, ",") {
-		segs := strings.Split(strings.TrimSpace(part), ";")
-		if len(segs) < 2 {
-			continue
+	for link != "" {
+		lt := strings.IndexByte(link, '<')
+		gt := strings.IndexByte(link, '>')
+		if lt < 0 || gt < lt {
+			return ""
 		}
-		isNext := false
-		for _, s := range segs[1:] {
-			if strings.Contains(s, `rel="next"`) {
-				isNext = true
-			}
+		url := link[lt+1 : gt]
+		rest := link[gt+1:]
+		// This entry's params run until the next '<' (start of the next entry).
+		params := rest
+		if next := strings.IndexByte(rest, '<'); next >= 0 {
+			params, link = rest[:next], rest[next:]
+		} else {
+			link = ""
 		}
-		if isNext {
-			return strings.Trim(strings.TrimSpace(segs[0]), "<>")
+		if strings.Contains(params, `rel="next"`) {
+			return url
 		}
 	}
 	return ""

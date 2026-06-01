@@ -66,6 +66,28 @@ func TestEnrichAddsRoleEdgeAndFinding(t *testing.T) {
 	}
 }
 
+func TestEnrichMatchesEnumeratedEnvironment(t *testing.T) {
+	// A role scoped to a specific environment is assumable only if that
+	// environment was enumerated. Previously only "production" was probed; now
+	// candidate subjects are derived from the repo's enumerated environments.
+	g := graphWithEntry()
+	g.Nodes["gh:repo:acme/widgets"].Attrs["environments"] = "staging"
+	role := GitHubTrust{
+		RoleARN: "arn:aws:iam::123456789012:role/staging-deploy", RoleName: "staging-deploy",
+		SubPatterns: []string{"repo:acme/widgets:environment:staging"}, HasSub: true,
+	}
+	n, err := Enrich(context.Background(), g, fetchTrusts(role), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n < 1 {
+		t.Fatalf("expected a binding for the env-scoped role via the enumerated environment, got %d", n)
+	}
+	if _, ok := g.Nodes[role.RoleARN]; !ok {
+		t.Error("expected a cloud-role node for the env-scoped role")
+	}
+}
+
 func TestEnrichScopedToOtherRepoNoMatch(t *testing.T) {
 	g := graphWithEntry()
 	role := GitHubTrust{

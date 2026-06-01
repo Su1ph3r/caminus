@@ -126,16 +126,23 @@ func writeGraph(path string, g *model.Graph) error {
 		_, err = os.Stdout.Write(append(data, '\n'))
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	// 0o600: the graph captures a recon inventory (repo/runner/secret names,
+	// OIDC config) of the target; keep it owner-readable only.
+	return os.WriteFile(path, append(data, '\n'), 0o600)
 }
 
 func printGraphSummary(w *os.File, g *model.Graph, out string) {
 	byKind := map[model.NodeKind]int{}
-	entry := 0
+	entry, unassessed := 0, 0
 	for _, n := range g.Nodes {
 		byKind[n.Kind]++
-		if n.Kind == model.NodePipeline && n.Attrs["entrypoint"] == "true" {
-			entry++
+		if n.Kind == model.NodePipeline {
+			if n.Attrs["entrypoint"] == "true" {
+				entry++
+			}
+			if n.Attrs["content_unavailable"] == "true" {
+				unassessed++
+			}
 		}
 	}
 	fmt.Fprintf(w, "\ntrust graph: %d nodes, %d edges", len(g.Nodes), len(g.Edges))
@@ -145,4 +152,7 @@ func printGraphSummary(w *os.File, g *model.Graph, out string) {
 	fmt.Fprintf(w, "\n  repos=%d pipelines=%d runners=%d secrets=%d oidc=%d  | entry-point pipelines: %d\n",
 		byKind[model.NodeRepo], byKind[model.NodePipeline], byKind[model.NodeRunner],
 		byKind[model.NodeSecret], byKind[model.NodeOIDCTrust], entry)
+	if unassessed > 0 {
+		fmt.Fprintf(w, "  warning: %d workflow(s) UNASSESSED — content unreadable (token may lack `contents` scope); not necessarily benign\n", unassessed)
+	}
 }

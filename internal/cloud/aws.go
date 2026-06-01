@@ -44,7 +44,11 @@ func Fetch(ctx context.Context, opts Options) ([]GitHubTrust, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cloud: load AWS config: %w", err)
 	}
-	return fetchRoles(ctx, iam.NewFromConfig(cfg))
+	logf := opts.Logf
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	return fetchRoles(ctx, iam.NewFromConfig(cfg), logf)
 }
 
 // rolePager is the subset of the IAM client fetchRoles needs, so tests can
@@ -53,7 +57,7 @@ type rolePager interface {
 	ListRoles(ctx context.Context, in *iam.ListRolesInput, optFns ...func(*iam.Options)) (*iam.ListRolesOutput, error)
 }
 
-func fetchRoles(ctx context.Context, client rolePager) ([]GitHubTrust, error) {
+func fetchRoles(ctx context.Context, client rolePager, logf func(string, ...any)) ([]GitHubTrust, error) {
 	paginator := iam.NewListRolesPaginator(client, &iam.ListRolesInput{})
 	var out []GitHubTrust
 	for paginator.HasMorePages() {
@@ -67,11 +71,17 @@ func fetchRoles(ctx context.Context, client rolePager) ([]GitHubTrust, error) {
 			}
 			doc, err := url.QueryUnescape(*r.AssumeRolePolicyDocument)
 			if err != nil {
+				// Fall back to the raw document but record that we couldn't
+				// decode it, so a parse failure below is attributable.
+				logf("role %s: trust document not URL-decodable: %v", *r.Arn, err)
 				doc = *r.AssumeRolePolicyDocument
 			}
 			trusts, err := ParseTrustPolicy(*r.Arn, *r.RoleName, accountFromARN(*r.Arn), doc)
 			if err != nil {
-				continue // skip unparsable policies rather than abort the scan
+				// Surface the skip — a dropped role is a false negative for the
+				// "which pipelines can assume which roles" question.
+				logf("role %s: skipped, trust policy unparsable: %v", *r.Arn, err)
+				continue
 			}
 			out = append(out, trusts...)
 		}

@@ -49,6 +49,12 @@ func TestEnumerateBuildsGraph(t *testing.T) {
 	if repo.Attrs["default_branch_protected"] != "false" {
 		t.Errorf("expected default_branch_protected=false (404 protection), got %q", repo.Attrs["default_branch_protected"])
 	}
+	if repo.Attrs["environments"] != "production" {
+		t.Errorf("expected environments=production, got %q", repo.Attrs["environments"])
+	}
+	if repo.Attrs["protected_environments"] != "production" {
+		t.Errorf("expected protected_environments=production, got %q", repo.Attrs["protected_environments"])
+	}
 
 	pipe := mustNode("gh:pipeline:acme/widgets:.github/workflows/release.yml", model.NodePipeline)
 	if pipe.Attrs["entrypoint"] != "true" {
@@ -87,6 +93,31 @@ func TestEnumerateBuildsGraph(t *testing.T) {
 	}
 }
 
+func TestEnumerateWorkflowContentUnavailable(t *testing.T) {
+	// When the token can list workflows but cannot read their content (a 404 on
+	// the contents API), the pipeline must be marked UNASSESSED — not silently
+	// treated as benign with no entry-point.
+	rt, err := vcr.Replay(filepath.Join("testdata", "widgets-no-content.cassette.json"))
+	if err != nil {
+		t.Fatalf("load cassette: %v", err)
+	}
+	c := NewClient(platform.Credentials{}, &http.Client{Transport: rt})
+	g := model.NewGraph()
+	if err := New(c).Enumerate(context.Background(), platform.Credentials{}, platform.Target{Org: "acme", Repo: "widgets"}, g); err != nil {
+		t.Fatalf("enumerate: %v", err)
+	}
+	pipe, ok := g.Nodes["gh:pipeline:acme/widgets:.github/workflows/release.yml"]
+	if !ok {
+		t.Fatal("missing pipeline node")
+	}
+	if pipe.Attrs["content_unavailable"] != "true" {
+		t.Errorf("expected content_unavailable=true, got %q", pipe.Attrs["content_unavailable"])
+	}
+	if pipe.Attrs["entrypoint"] != "false" {
+		t.Errorf("unassessed workflow must default entrypoint=false, got %q", pipe.Attrs["entrypoint"])
+	}
+}
+
 func TestEnumerateMissingOrg(t *testing.T) {
 	c := NewClient(platform.Credentials{}, &http.Client{})
 	err := New(c).Enumerate(context.Background(), platform.Credentials{}, platform.Target{}, model.NewGraph())
@@ -102,5 +133,10 @@ func TestNextLink(t *testing.T) {
 	}
 	if got := nextLink(""); got != "" {
 		t.Errorf("nextLink(empty) = %q", got)
+	}
+	// A next URL with a literal comma in its query must not be truncated.
+	comma := `<https://api.github.com/search?q=a,b&page=2>; rel="next"`
+	if got := nextLink(comma); got != "https://api.github.com/search?q=a,b&page=2" {
+		t.Errorf("nextLink(comma) = %q, want full URL", got)
 	}
 }

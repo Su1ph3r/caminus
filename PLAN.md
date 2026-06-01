@@ -101,6 +101,14 @@ live from cloud APIs** (AWS first) — see *Dependency note*.
   account. CI now runs `go test -tags cloud ./...` and `go build -tags cloud`.
   Full enum→cloud→graph pipeline verified end-to-end via replay.
 
+### M2 finalization (completing the milestone)
+- Paginated runner/secret enumeration (Link header), not just the first page.
+- Environments + protection-rule enumeration recorded on the repo node.
+- Rate-limit-aware error (403 + `X-RateLimit-Remaining: 0`).
+- Removed the stale `graph --cloud` placeholder flag (`cloud` is its own command).
+- Docs (README/DESIGN) updated: M2 marked delivered, cloud flow + `-tags cloud`
+  build documented. **M2 COMPLETE.**
+
 ### Dependency note
 Direct cloud reads add the AWS SDK, changing the project's "zero dependencies"
 claim. Containment: core `scan`/`enum`/`graph` stay stdlib-only; cloud is

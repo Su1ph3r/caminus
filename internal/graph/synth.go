@@ -182,10 +182,13 @@ func buildPath(g *model.Graph, entry, sink *model.Node, ids []string, w int) mod
 // node is always the poisoned-pipeline primitive; every other node is labelled
 // by kind, whether it is the terminal sink or an intermediate hop.
 func stepFor(n *model.Node, isEntry bool) model.AttackStep {
-	s := model.AttackStep{NodeID: n.ID}
+	// Guard before dereferencing: a node ID can appear on a path via a dangling
+	// edge (an endpoint absent from Nodes, e.g. a hand-edited or truncated
+	// graph.json), in which case g.Nodes[id] is nil.
 	if n == nil {
-		return s
+		return model.AttackStep{}
 	}
+	s := model.AttackStep{NodeID: n.ID}
 	if isEntry {
 		s.Technique = "Poisoned Pipeline Execution"
 		s.MITRE = "T1059"

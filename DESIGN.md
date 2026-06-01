@@ -136,22 +136,23 @@ internal/reporter/     text + JSON (Vinculum-shaped); SARIF/Ariadne next
 GitHub Actions rules (injection, pwn-request, self-hosted runner, write-all,
 unpinned actions), text + JSON output, severity gate, tests. Single binary.
 
-**M1.5 — coverage & output.**
-- GitLab CI (`.gitlab-ci.yml`) static rules: `rules:`/`only:` injection,
-  protected-branch/variable exposure, `CI_JOB_TOKEN` scope.
-- Indirect-PPE: flag pipeline-invoked local scripts (Makefile/npm/tox targets).
-- SARIF reporter (CI gate, code scanning) + Ariadne export.
-- Structural YAML pass behind `-tags yaml` for env-dataflow on injection.
+**M1.5 — coverage & output. ✅ (shipped in v0.1.0)**
+- GitLab CI (`.gitlab-ci.yml`) static rules: script injection, MR-pipeline
+  exposure, debug-trace, privileged dind, unpinned include.
+- SARIF reporter (CI gate, code scanning).
+- *Deferred:* indirect-PPE, structural YAML (`-tags yaml`), Ariadne export.
 
-**M2 — enumeration & graph.**
-- `internal/platform/github` and `/gitlab` read-only clients (stdlib http):
-  repos, workflows, runners (org + repo, including non-default/self-hosted),
-  secret names, environments, branch protections, OIDC subject claims.
-- Trust-graph build; `graph` walks edges to ranked attack paths with MITRE
-  mapping. `cloud` resolves the OIDC → cloud-role blast radius by reading IAM
-  trust policies **directly via the AWS SDK** (the security-critical trust
-  matching is dependency-free and unit-tested; the SDK fetch is isolated behind
-  the `cloud` build tag so the default binary links nothing third-party).
+**M2 — enumeration & graph. ✅**
+- `internal/platform/github` read-only client (stdlib http): repos, workflows
+  (→ static rules → entry points), self-hosted runners, secret names,
+  environments + protection rules, branch protection, OIDC subject claims;
+  paginated, with record/replay for token-free testing.
+- Trust-graph build; `graph` walks edges to ranked, MITRE-tagged attack paths.
+  `cloud` resolves the OIDC → cloud-role blast radius by reading IAM trust
+  policies **directly via the AWS SDK** (the security-critical trust matching is
+  dependency-free and unit-tested; the SDK fetch is isolated behind the `cloud`
+  build tag so the default binary links nothing third-party).
+- *M2.5:* GitLab enum, GCP/Azure cloud read, role→resource blast radius.
 
 **M3 — dynamic confirmation.**
 - `exploit` generates the concrete artifact (malicious-PR diff / workflow

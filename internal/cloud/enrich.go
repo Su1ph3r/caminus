@@ -25,6 +25,10 @@ type Options struct {
 	// credentials, required for replay where no real creds exist.
 	Transport http.RoundTripper
 	Anonymous bool
+
+	// Logf, if set, receives non-fatal diagnostics (e.g. an IAM role whose
+	// trust policy could not be parsed and was skipped). Default: discarded.
+	Logf func(string, ...any)
 }
 
 // FetchFunc retrieves GitHub-OIDC IAM trusts. It is implemented by the AWS SDK
@@ -36,6 +40,7 @@ type FetchFunc func(ctx context.Context, opts Options) ([]GitHubTrust, error)
 type repoInfo struct {
 	full          string
 	defaultBranch string
+	environments  []string
 	overBroad     bool
 	oidcNodeID    string
 	hasEntry      bool
@@ -92,6 +97,7 @@ func summarizeRepos(g *model.Graph) []*repoInfo {
 			infos[n.ID] = &repoInfo{
 				full:          strings.TrimPrefix(n.ID, "gh:repo:"),
 				defaultBranch: n.Attrs["default_branch"],
+				environments:  splitComma(n.Attrs["environments"]),
 			}
 		}
 	}
@@ -125,6 +131,11 @@ func summarizeRepos(g *model.Graph) []*repoInfo {
 }
 
 // candidateSubjects builds the OIDC subjects a repository's runs could present.
+// It probes the default-branch ref, pull_request, and every environment the
+// enumerator discovered for the repo. Subjects for non-default branches or
+// environments that were not enumerated are not probed, so a precisely-scoped
+// role pinned to such a context may not be reported (a documented limitation,
+// not a silent one — see DESIGN.md §M2.5 for resource-level resolution).
 func candidateSubjects(ri *repoInfo) []string {
 	branch := ri.defaultBranch
 	if branch == "" {
@@ -133,7 +144,11 @@ func candidateSubjects(ri *repoInfo) []string {
 	subs := []string{
 		"repo:" + ri.full + ":ref:refs/heads/" + branch,
 		"repo:" + ri.full + ":pull_request",
-		"repo:" + ri.full + ":environment:production",
+	}
+	for _, env := range ri.environments {
+		if env != "" {
+			subs = append(subs, "repo:"+ri.full+":environment:"+env)
+		}
 	}
 	if ri.overBroad {
 		// an over-broad subject lets the repo present any context; this probe
@@ -141,6 +156,21 @@ func candidateSubjects(ri *repoInfo) []string {
 		subs = append(subs, "repo:"+ri.full+":__caminus_any__")
 	}
 	return subs
+}
+
+// splitComma splits a comma-joined attribute value into a slice, dropping empty
+// elements; returns nil for an empty input.
+func splitComma(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func oidc002(ri *repoInfo, t GitHubTrust) model.Finding {

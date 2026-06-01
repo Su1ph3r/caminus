@@ -18,11 +18,11 @@ import (
 func runGraph(argv []string) int {
 	fs := flag.NewFlagSet("graph", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	in := fs.String("i", "graph.json", "trust-graph input file (from `caminus enum`)")
+	in := fs.String("i", "graph.json", "trust-graph input file (from `caminus enum`, enriched by `caminus cloud`)")
 	scan := fs.String("scan", "", "optional scan JSON (caminus scan --format json) to mark entry points")
-	cloud := fs.String("cloud", "", "cloud export for OIDC blast-radius [Task 4]")
 	format := fs.String("format", "text", "output: text|json")
-	minSev := fs.String("min-severity", "info", "report paths at or above: critical|high|medium|low|info")
+	minSev := fs.String("min-severity", "info", "report paths/findings at or above: critical|high|medium|low|info")
+	deprecatedCloud := fs.String("cloud", "", "deprecated: cloud enrichment is the `caminus cloud` subcommand")
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, "caminus graph — synthesize ranked attack paths from the trust graph\n\nOPTIONS\n")
 		fs.PrintDefaults()
@@ -30,8 +30,8 @@ func runGraph(argv []string) int {
 	if err := fs.Parse(argv); err != nil {
 		return 2
 	}
-	if *cloud != "" {
-		fmt.Fprintln(os.Stderr, "caminus graph: --cloud blast-radius merge lands in Task 4; ignoring for now")
+	if *deprecatedCloud != "" {
+		fmt.Fprintln(os.Stderr, "caminus graph: --cloud is deprecated and ignored; run `caminus cloud -i <graph>` first to add cloud blast-radius")
 	}
 
 	min, ok := parseSeverity(*minSev)
@@ -59,17 +59,34 @@ func runGraph(argv []string) int {
 			kept = append(kept, p)
 		}
 	}
+	// Surface enumeration findings (e.g. CAM-OIDC-001/002) carried in the trust
+	// graph: `cloud`/`enum` record them, and this is the stage that presents the
+	// consolidated attacker view, so they must not be dropped here.
+	var keptFindings []model.Finding
+	for _, fnd := range g.Findings {
+		if fnd.Severity.Rank() >= min.Rank() {
+			keptFindings = append(keptFindings, fnd)
+		}
+	}
 
 	switch *format {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(kept); err != nil {
+		out := struct {
+			Paths    []model.AttackPath `json:"paths"`
+			Findings []model.Finding    `json:"findings"`
+		}{Paths: kept, Findings: keptFindings}
+		if err := enc.Encode(out); err != nil {
 			fmt.Fprintf(os.Stderr, "caminus graph: %v\n", err)
 			return 2
 		}
 	case "text":
 		printPaths(kept)
+		if len(keptFindings) > 0 {
+			fmt.Printf("\n%d enumeration finding(s):\n", len(keptFindings))
+			reporter.Text(os.Stdout, keptFindings)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "caminus graph: invalid --format %q\n", *format)
 		return 2
@@ -114,8 +131,14 @@ func mergeScanEntryPoints(g *model.Graph, scanPath string) error {
 			continue
 		}
 		p := n.Attrs["path"]
+		if p == "" {
+			continue
+		}
 		for file := range confirmable {
-			if p != "" && (strings.HasSuffix(file, p) || strings.HasSuffix(p, file)) {
+			// Match on equal normalized paths, or on a full path-segment
+			// boundary suffix — not a bare bidirectional HasSuffix, which could
+			// match an unrelated path that merely ends in the same characters.
+			if file == p || strings.HasSuffix(file, "/"+p) || strings.HasSuffix(p, "/"+file) {
 				if n.Attrs == nil {
 					n.Attrs = map[string]string{}
 				}

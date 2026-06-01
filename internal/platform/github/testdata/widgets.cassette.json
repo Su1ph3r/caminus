@@ -51,6 +51,13 @@
     },
     {
       "method": "GET",
+      "path": "/repos/acme/widgets/environments",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"total_count\":1,\"environments\":[{\"id\":1,\"name\":\"production\",\"protection_rules\":[{\"id\":1,\"type\":\"required_reviewers\"}]}]}"
+    },
+    {
+      "method": "GET",
       "path": "/orgs/acme/actions/runners",
       "query": "per_page=100",
       "status": 200,
