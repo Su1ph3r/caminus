@@ -65,7 +65,7 @@ USAGE
 COMMANDS
   scan      Static attack-surface analysis of pipeline definitions (no token)
   enum      Read-only enumeration into the trust graph (GitHub; GitLab [M2.5])
-  graph     Synthesize attack paths from the trust graph                   [M2]
+  graph     Synthesize ranked attack paths from the trust graph
   exploit   Generate/confirm an attack primitive against a target you own  [M3]
   version   Print version
   help      Print this help
@@ -79,6 +79,8 @@ EXAMPLES
 
   caminus enum --org acme --token $CAMINUS_TOKEN   # build the trust graph
   caminus enum --org acme --repo acme/widgets -o graph.json
+  caminus graph -i graph.json                      # ranked attack paths
+  caminus graph -i graph.json --min-severity high --format json
 
 Run "caminus <command> -h" for command-specific options.
 `)

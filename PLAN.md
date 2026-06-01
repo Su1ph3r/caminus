@@ -70,11 +70,13 @@ live from cloud APIs** (AWS first) — see *Dependency note*.
   with a fixture cassette + tests; `enum` command emits `graph.json`. **Zero-dep.**
   *Deferred to M2.x: environments enumeration, runner groups, full
   multi-page runner/secret listing, rate-limit backoff.*
-- [ ] **2. Trust-graph builder + `graph` command** — populate `model.Graph` from
-  enum + `scan` findings; BFS from entry points (confirmable findings /
-  fork-facing triggers) to sinks (secret / runner / cloud-role); rank by
-  `entry-sev × sink-value × confirmability ÷ path-len`; MITRE-tag each step;
-  text + json output. **Zero-dep.**
+- [x] **2. Trust-graph builder + `graph` command** — `internal/graph`
+  reachability model (containment walked child→parent, capabilities forward),
+  BFS from entry points (entrypoint=true / privileged triggers) to sinks
+  (self-hosted runner / org+repo secret / OIDC / cloud-role), ranked by
+  `entry-weight × sink-value ÷ path-len`, MITRE-tagged steps; `graph` cmd loads
+  graph.json, optional `--scan` to mark entry points, text + json, severity
+  filter. Tests + end-to-end (enum→graph) verified. **Zero-dep.**
 - [ ] **3. OIDC modeling + `CAM-OIDC-001`** — over-broad federation (wildcard
   `sub`, missing `aud`, branch-unconstrained trust). GitHub side. **Zero-dep.**
 - [ ] **4. AWS cloud read** — `internal/cloud/aws` (AWS SDK v2: iam + sts).

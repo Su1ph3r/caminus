@@ -5,7 +5,15 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
-### Added — M2 Task 1 (in progress)
+### Added — M2 Task 2
+- **`graph` — ranked attack-path synthesis.** `internal/graph` walks the trust
+  graph from attacker-controllable entry points (poisonable pipelines) to
+  high-value sinks (self-hosted runners, secrets, OIDC federation), ranks the
+  paths, and tags each step with a MITRE ATT&CK technique. `graph` loads a
+  `graph.json` from `enum`, optionally merges a `scan` report to mark entry
+  points, and emits text or JSON.
+
+### Added — M2 Task 1
 - **`enum` — read-only GitHub enumeration into the trust graph.** Stdlib HTTP
   client (`internal/platform/github`) enumerates repos, workflows (run through
   the static rules to mark *entry points*), self-hosted runners, secret names
