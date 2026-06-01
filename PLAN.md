@@ -52,7 +52,57 @@ add no new detection value now).
 `go vet`/`go test` green · GitLab vuln → criticals, safe → 0 · `--format sarif`
 validates · self-scan passes in CI · `caminus version` reports the tag.
 
-## Next milestones (post-v0.1)
-- **M1.5:** indirect-PPE, structural YAML, Vinculum parser + Ariadne export.
-- **M2:** authenticated `enum` + trust-graph + OIDC→cloud blast-radius (Nubicustos).
+## Sprint 2 → M2: enum + trust graph + OIDC blast-radius
+
+The moat. From a token, build the trust graph and synthesize ranked attack
+paths from attacker-controllable triggers to secrets, self-hosted runners, and
+**OIDC-federated cloud roles + resources**.
+
+Decisions (locked): **GitHub-first** (GitLab enum → M2.5). Cloud data is **read
+live from cloud APIs** (AWS first) — see *Dependency note*.
+
+### Tasks
+- [x] **1. GitHub enum client** — `internal/platform/github`, stdlib http,
+  `CAMINUS_TOKEN`. Enumerates workflows (→ static rules → mark entry points),
+  self-hosted runners (org+repo), secret *names* (repo+org), repo/org OIDC
+  subject-claim config, branch protection on the default branch. Pagination
+  (Link header), graceful 403/404. Record/replay transport (`internal/vcr`)
+  with a fixture cassette + tests; `enum` command emits `graph.json`. **Zero-dep.**
+  *Deferred to M2.x: environments enumeration, runner groups, full
+  multi-page runner/secret listing, rate-limit backoff.*
+- [ ] **2. Trust-graph builder + `graph` command** — populate `model.Graph` from
+  enum + `scan` findings; BFS from entry points (confirmable findings /
+  fork-facing triggers) to sinks (secret / runner / cloud-role); rank by
+  `entry-sev × sink-value × confirmability ÷ path-len`; MITRE-tag each step;
+  text + json output. **Zero-dep.**
+- [ ] **3. OIDC modeling + `CAM-OIDC-001`** — over-broad federation (wildcard
+  `sub`, missing `aud`, branch-unconstrained trust). GitHub side. **Zero-dep.**
+- [ ] **4. AWS cloud read** — `internal/cloud/aws` (AWS SDK v2: iam + sts).
+  Enumerate IAM roles trusting `token.actions.githubusercontent.com`, parse the
+  `sub`/`aud` trust conditions, resolve which pipeline subjects can assume which
+  roles → CloudRole/Resource nodes + can-assume/reaches edges + blast-radius.
+  **Behind `-tags cloud`** so the core binary stays dependency-free.
+- [ ] **5. Record/replay test harness** — fixture API/cloud responses (à la
+  Vercelsior `--record`/`--replay`) so CI needs no live token/creds.
+
+### Dependency note
+Direct cloud reads add the AWS SDK, changing the project's "zero dependencies"
+claim. Containment: core `scan`/`enum`/`graph` stay stdlib-only; cloud is
+isolated in `internal/cloud/*`, AWS-first (GCP/Azure → M2.5/M3), gated behind
+`-tags cloud`. Update README/DESIGN wording when Task 4 lands
+("dependency-free core; cloud enumeration uses the official cloud SDKs").
+
+### Scope cuts
+GitLab enum → M2.5 · GCP/Azure cloud read → M2.5/M3 · full IAM permission
+simulation (use role policy summaries, don't reimplement the evaluator) ·
+Ariadne export → stretch.
+
+### Acceptance
+`caminus enum --org X --token …` → graph.json · `caminus graph -i graph.json
+[--scan scan.json] --format text` → ranked paths · AWS OIDC trust resolved on a
+fixture · `CAM-OIDC-001` fires on wildcard `sub` · record/replay tests green.
+
+## Later milestones
+- **M2.5:** GitLab enum + GCP/Azure cloud read; indirect-PPE; structural YAML;
+  Vinculum parser + Ariadne export.
 - **M3:** `exploit` — authorization-gated dynamic confirmation.

@@ -1,0 +1,67 @@
+{
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/repos/acme/widgets",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"name\":\"widgets\",\"full_name\":\"acme/widgets\",\"private\":false,\"default_branch\":\"main\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widgets/actions/workflows",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"total_count\":1,\"workflows\":[{\"name\":\"Release\",\"path\":\".github/workflows/release.yml\",\"state\":\"active\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widgets/contents/.github/workflows/release.yml",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"content\":\"b246CiAgcHVsbF9yZXF1ZXN0X3RhcmdldDoKam9iczoKICBidWlsZDoKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIHN0ZXBzOgogICAgICAtIHVzZXM6IGFjdGlvbnMvY2hlY2tvdXRAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgcmVmOiAke3sgZ2l0aHViLmV2ZW50LnB1bGxfcmVxdWVzdC5oZWFkLnNoYSB9fQogICAgICAtIHJ1bjogZWNobyAke3sgZ2l0aHViLmV2ZW50LnB1bGxfcmVxdWVzdC50aXRsZSB9fQo=\",\"encoding\":\"base64\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widgets/actions/runners",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"total_count\":1,\"runners\":[{\"id\":7,\"name\":\"selfhost-1\",\"os\":\"linux\",\"status\":\"online\",\"labels\":[{\"name\":\"self-hosted\",\"type\":\"read-only\"},{\"name\":\"linux\",\"type\":\"read-only\"}]}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widgets/actions/secrets",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"total_count\":1,\"secrets\":[{\"name\":\"PROD_DEPLOY_KEY\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widgets/actions/oidc/customization/sub",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"use_default\":false,\"include_claim_keys\":[\"repo\",\"context\"]}"
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widgets/branches/main/protection",
+      "query": "per_page=100",
+      "status": 404,
+      "body": "{\"message\":\"Branch not protected\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/orgs/acme/actions/runners",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"total_count\":0,\"runners\":[]}"
+    },
+    {
+      "method": "GET",
+      "path": "/orgs/acme/actions/secrets",
+      "query": "per_page=100",
+      "status": 200,
+      "body": "{\"total_count\":1,\"secrets\":[{\"name\":\"ORG_NPM_TOKEN\",\"visibility\":\"all\"}]}"
+    }
+  ]
+}

@@ -5,6 +5,15 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — M2 Task 1 (in progress)
+- **`enum` — read-only GitHub enumeration into the trust graph.** Stdlib HTTP
+  client (`internal/platform/github`) enumerates repos, workflows (run through
+  the static rules to mark *entry points*), self-hosted runners, secret names
+  (repo + org), OIDC subject claims, and default-branch protection, emitting a
+  `graph.json`.
+- **Record/replay transport** (`internal/vcr`) with `--record`/`--replay` so
+  enumeration is testable without a live token (à la Vercelsior).
+
 ### Added — v0.1.0 (Sprint 1)
 - **GitLab CI support.** New `internal/gitlabci` parser and five rules at taxonomy
   parity with the GitHub set:

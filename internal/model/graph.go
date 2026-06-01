@@ -30,6 +30,7 @@ const (
 type EdgeKind string
 
 const (
+	EdgeContains  EdgeKind = "contains"        // org -> repo, repo -> pipeline
 	EdgeTriggers  EdgeKind = "triggers"        // trigger -> pipeline
 	EdgeRunsOn    EdgeKind = "runs-on"         // job -> runner
 	EdgeCanRead   EdgeKind = "can-read-secret" // job -> secret
@@ -68,6 +69,17 @@ func NewGraph() *Graph {
 
 // AddNode inserts or replaces a node by ID and returns it.
 func (g *Graph) AddNode(n *Node) *Node {
+	g.Nodes[n.ID] = n
+	return n
+}
+
+// AddNodeOnce inserts n only if its ID is not already present, returning the
+// node that ends up in the graph (existing or new). Useful when the same
+// runner/secret/identity is discovered from multiple repos.
+func (g *Graph) AddNodeOnce(n *Node) *Node {
+	if ex, ok := g.Nodes[n.ID]; ok {
+		return ex
+	}
 	g.Nodes[n.ID] = n
 	return n
 }
