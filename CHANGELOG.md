@@ -3,7 +3,12 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.2.0] — 2026-06-01
+
+First tagged release. Adds the full M2 capability set on top of the M1 static
+scanner: GitLab CI rules, authenticated GitHub enumeration, ranked attack-path
+synthesis, and the AWS OIDC→cloud blast radius. Hardened by a finalize review
+and two multi-agent bug-hunt passes.
 
 ### Fixed — full-codebase bug hunt
 False-negatives and a credential-leak vector found by a `--full` multi-agent hunt
