@@ -3,6 +3,62 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] — 2026-06-01
+
+Milestone **M3 complete**: dynamic confirmation end to end — live, reversible
+arming for the generated PoCs, and GitLab→cloud OIDC blast-radius so the
+confirmation works for GitLab graphs too.
+
+### Added — live arming (`exploit --arm --i-own-target`)
+- `internal/exploit/arm.go` + `arm_platforms.go`: a self-contained, write-capable
+  GitHub/GitLab client that delivers a workflow-file PoC to a fresh branch on a
+  target you own, lets the pushed branch trigger the pipeline, polls the run to
+  completion, fetches the job logs, and confirms the **benign canary** — then
+  deletes the branch.
+- **Reversible by construction:** cleanup is deferred and runs on every exit path
+  (success, failure, or canary-absent); `--keep` opts out for debugging; a
+  non-cleaned branch is reported with a warning. The token is attached only to
+  the configured host. Only the workflow-delivering PoCs (OIDC, runner) are
+  auto-armed; injection/pwn-request fall back to the printed manual playbook.
+- New flags: `--token` (or `CAMINUS_TOKEN`), `--arm-base-url`, `--keep`. The
+  orchestration is exercised by scripted-transport tests (built blind; not run
+  against a live target by the suite).
+
+### Hardened — finalize review + multi-agent bug hunt
+Pre-release review of the M3 changes (a security/quality finalize pass and a
+full-codebase multi-agent bug hunt) fixed:
+- **Token leak (blocker):** the live-arming write client followed redirects with
+  no guard; it now strips both `Authorization` and `PRIVATE-TOKEN` on any host
+  change while still following the redirect (GitHub job-logs 302 to credential-
+  less blob storage). Go strips neither across subdomains, and never strips
+  `PRIVATE-TOKEN`.
+- **Inverted confirmation signal:** unreadable run logs were reported as a clean
+  "not proved"; a run that did not succeed was reported as a clean negative.
+  Both are now surfaced as errors / INCONCLUSIVE, and a left-behind PoC branch is
+  promoted to a returned error and a non-zero exit.
+- **Detection accuracy:** CAM-INJ-001 now detects untrusted expressions inside the
+  common `- run: |` list-item block scalar (previously missed); CAM-GL-INJ-001 no
+  longer false-positives on `script:` appearing inside a quoted value.
+- **Robustness:** a JSON-null node in a hand-edited `graph.json` no longer panics
+  the graph/cloud/exploit stages; finding evidence truncates on a UTF-8 rune
+  boundary; a corrupt default `graph.json` is fatal rather than silently skipped;
+  a failed `--record` cassette save now exits non-zero; `scan` warns on UNASSESSED
+  files (opt-in `--fail-on-incomplete`, default exit unchanged).
+- **Hardening:** cloud/graph-derived values are collapsed to one line before
+  interpolation into generated PoC YAML (no step injection under `--arm`); GitHub
+  API path segments are URL-escaped (parity with GitLab/arm); artifact output dirs
+  assert containment under the output root.
+
+### Added — GitLab→cloud OIDC matching
+- The cloud trust model now carries the CI **issuer**; the AWS trust-policy parser
+  recognizes GitLab-issuer federations (dynamic `<issuer>:sub` keys) alongside
+  GitHub, and GCP/Azure readers accept GitLab providers/credentials too.
+- Subject classification is grammar-agnostic (`repo:` and GitLab `project_path:`),
+  and `cloud` enrichment summarizes GitLab projects + builds GitLab candidate
+  subjects, so `CAM-OIDC-002` now fires for GitLab graphs. Trust↔repo matching is
+  gated by source platform (a GitHub federation can't match a GitLab project, and
+  vice versa — important for no-subject-condition trusts).
+
 ## [0.4.0] — 2026-06-01
 
 Milestone **M3 (generate stage)**: the `exploit` command turns confirmable

@@ -47,36 +47,36 @@ func FetchGCP(ctx context.Context, opts Options) ([]GitHubTrust, error) {
 		return nil, fmt.Errorf("cloud(gcp): init IAM client: %w", err)
 	}
 
-	githubPools, err := githubFederatingPools(ctx, svc, opts.Project, logf)
+	poolIssuers, err := ciFederatingPools(ctx, svc, opts.Project, logf)
 	if err != nil {
 		return nil, err
 	}
-	if len(githubPools) == 0 {
-		logf("no workload-identity pool federates GitHub Actions OIDC in project %s", opts.Project)
+	if len(poolIssuers) == 0 {
+		logf("no workload-identity pool federates GitHub/GitLab OIDC in project %s", opts.Project)
 		return nil, nil
 	}
 
-	return gcpServiceAccountTrusts(ctx, svc, opts.Project, githubPools, logf)
+	return gcpServiceAccountTrusts(ctx, svc, opts.Project, poolIssuers, logf)
 }
 
-// githubFederatingPools returns the set of workload-identity-pool resource names
-// in the project that have at least one OIDC provider trusting the GitHub Actions
-// issuer.
-func githubFederatingPools(ctx context.Context, svc *iam.Service, project string, logf func(string, ...any)) (map[string]bool, error) {
+// ciFederatingPools returns the workload-identity-pool resource names in the
+// project that have at least one OIDC provider trusting a CI issuer (GitHub or
+// GitLab), mapped to that issuer host.
+func ciFederatingPools(ctx context.Context, svc *iam.Service, project string, logf func(string, ...any)) (map[string]string, error) {
 	parent := fmt.Sprintf("projects/%s/locations/global", project)
-	pools := map[string]bool{}
+	pools := map[string]string{}
 	err := svc.Projects.Locations.WorkloadIdentityPools.List(parent).Pages(ctx, func(resp *iam.ListWorkloadIdentityPoolsResponse) error {
 		for _, pool := range resp.WorkloadIdentityPools {
 			if pool.Disabled || pool.State != "ACTIVE" {
 				continue
 			}
-			github, perr := poolFederatesGitHub(ctx, svc, pool.Name)
+			issuer, ok, perr := poolFederatesCI(ctx, svc, pool.Name)
 			if perr != nil {
 				logf("pool %s: provider list failed, skipped: %v", pool.Name, perr)
 				continue
 			}
-			if github {
-				pools[pool.Name] = true
+			if ok {
+				pools[pool.Name] = issuer
 			}
 		}
 		return nil
@@ -87,25 +87,34 @@ func githubFederatingPools(ctx context.Context, svc *iam.Service, project string
 	return pools, nil
 }
 
-func poolFederatesGitHub(ctx context.Context, svc *iam.Service, poolName string) (bool, error) {
-	found := false
+// poolFederatesCI returns the CI OIDC issuer host a pool federates (GitHub or
+// GitLab) and whether any provider in it does.
+func poolFederatesCI(ctx context.Context, svc *iam.Service, poolName string) (string, bool, error) {
+	issuer := ""
 	err := svc.Projects.Locations.WorkloadIdentityPools.Providers.List(poolName).Pages(ctx, func(resp *iam.ListWorkloadIdentityPoolProvidersResponse) error {
 		for _, p := range resp.WorkloadIdentityPoolProviders {
 			if p.Disabled || p.Oidc == nil {
 				continue
 			}
-			if strings.TrimRight(p.Oidc.IssuerUri, "/") == gitHubGCPIssuer {
-				found = true
+			uri := strings.TrimRight(p.Oidc.IssuerUri, "/")
+			if uri == gitHubGCPIssuer {
+				issuer = GitHubOIDCIssuer
+			} else if isGitLabIssuer(uri) {
+				issuer = strings.TrimPrefix(strings.TrimPrefix(uri, "https://"), "http://")
 			}
 		}
 		return nil
 	})
-	return found, err
+	return issuer, issuer != "", err
 }
 
 // gcpServiceAccountTrusts walks every service account's IAM policy and converts
-// impersonation bindings that reference a GitHub-federating pool into trusts.
-func gcpServiceAccountTrusts(ctx context.Context, svc *iam.Service, project string, githubPools map[string]bool, logf func(string, ...any)) ([]GitHubTrust, error) {
+// impersonation bindings that reference a CI-federating pool into trusts.
+func gcpServiceAccountTrusts(ctx context.Context, svc *iam.Service, project string, poolIssuers map[string]string, logf func(string, ...any)) ([]GitHubTrust, error) {
+	poolSet := make(map[string]bool, len(poolIssuers))
+	for p := range poolIssuers {
+		poolSet[p] = true
+	}
 	var out []GitHubTrust
 	name := "projects/" + project
 	err := svc.Projects.ServiceAccounts.List(name).Pages(ctx, func(resp *iam.ListServiceAccountsResponse) error {
@@ -115,7 +124,7 @@ func gcpServiceAccountTrusts(ctx context.Context, svc *iam.Service, project stri
 				logf("service account %s: getIamPolicy failed, skipped: %v", sa.Email, perr)
 				continue
 			}
-			out = append(out, trustsFromPolicy(sa, project, policy, githubPools, logf)...)
+			out = append(out, trustsFromPolicy(sa, project, policy, poolSet, poolIssuers, logf)...)
 		}
 		return nil
 	})
@@ -125,7 +134,7 @@ func gcpServiceAccountTrusts(ctx context.Context, svc *iam.Service, project stri
 	return out, nil
 }
 
-func trustsFromPolicy(sa *iam.ServiceAccount, project string, policy *iam.Policy, githubPools map[string]bool, logf func(string, ...any)) []GitHubTrust {
+func trustsFromPolicy(sa *iam.ServiceAccount, project string, policy *iam.Policy, poolSet map[string]bool, poolIssuers map[string]string, logf func(string, ...any)) []GitHubTrust {
 	label := sa.Email
 	if sa.DisplayName != "" {
 		label = sa.DisplayName
@@ -136,16 +145,17 @@ func trustsFromPolicy(sa *iam.ServiceAccount, project string, policy *iam.Policy
 			continue
 		}
 		for _, m := range b.Members {
-			patterns, hasSub, class := parseGCPMember(m, githubPools)
+			patterns, hasSub, pool, class := parseGCPMember(m, poolSet)
 			switch class {
 			case memberNotGitHub:
 				continue
 			case memberUnmappedAttr:
-				logf("service account %s: GitHub pool member %q uses an attribute mapping Caminus can't scope; skipped", sa.Email, m)
+				logf("service account %s: CI pool member %q uses an attribute mapping Caminus can't scope; skipped", sa.Email, m)
 				continue
 			}
 			out = append(out, GitHubTrust{
 				Provider:    "gcp",
+				Issuer:      poolIssuers[pool],
 				RoleARN:     sa.Email,
 				RoleName:    label,
 				Account:     project,

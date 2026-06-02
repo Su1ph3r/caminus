@@ -40,8 +40,12 @@ func Parse(path string, data []byte) *Doc {
 }
 
 var (
-	reExecKey    = regexp.MustCompile(`^(?:script|before_script|after_script):\s*([|>].*)?$`)
-	reExecInline = regexp.MustCompile(`(?:^|\s)(?:script|before_script|after_script):\s+[^|>\s]`)
+	reExecKey = regexp.MustCompile(`^(?:script|before_script|after_script):\s*([|>].*)?$`)
+	// reExecInline is anchored to a YAML key position (line start, optionally a
+	// list-item dash) so the substring "script:" inside a quoted value (e.g. a
+	// variables/description string "run script: foo") is not mistaken for a
+	// shell-exec context — mirroring the GitHub reRunInline anchoring.
+	reExecInline = regexp.MustCompile(`^\s*(?:-\s+)?(?:script|before_script|after_script):\s+[^|>\s]`)
 	rePipeSource = regexp.MustCompile(`CI_PIPELINE_SOURCE\s*[=!]=\s*["']?([a-z_]+)["']?`)
 	reOnlyExcept = regexp.MustCompile(`^\s*(?:only|except):\s*(.*?)\s*$`)
 	reListItem   = regexp.MustCompile(`^\s*-\s*["']?([a-z_]+)["']?\s*$`)

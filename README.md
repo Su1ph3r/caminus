@@ -14,10 +14,10 @@ Single binary, dependency-free core. Linux, macOS, Windows. (Cloud
 enumeration — `caminus cloud` — uses the official AWS / GCP / Azure SDKs and is
 built only with `-tags cloud`; the default build links no third-party packages.)
 
-> **Status:** `scan` (GitHub Actions + GitLab CI), `enum` (GitHub **and**
-> GitLab), `graph`, `cloud` (AWS, GCP, Azure OIDC blast-radius), and `exploit`
-> (PoC generation for confirmable findings) are all working. Live API-driven
-> arming is the next increment. See [`DESIGN.md`](./DESIGN.md) §Roadmap and
+> **Status:** the full pipeline works — `scan` (GitHub Actions + GitLab CI),
+> `enum` (GitHub **and** GitLab), `graph`, `cloud` (AWS, GCP, Azure OIDC
+> blast-radius, for GitHub **and** GitLab graphs), and `exploit` (PoC generation
+> **plus** live, reversible arming). See [`DESIGN.md`](./DESIGN.md) §Roadmap and
 > [`PLAN.md`](./PLAN.md).
 
 ---
@@ -100,14 +100,18 @@ caminus exploit -i graph.json --finding CAM-OIDC-002
 caminus scan . --format json > scan.json
 caminus exploit --scan scan.json --finding CAM-INJ-001 --repo me/mine -o -
 
-# Print the reversible run+teardown playbook (no live mutation; gated)
-caminus exploit -i graph.json --finding CAM-OIDC-002 --repo me/mine --arm --i-own-target
+# Live, reversible confirmation against a target you own (gated)
+caminus exploit -i graph.json --finding CAM-OIDC-002 --repo me/mine \
+    --arm --i-own-target --token $CAMINUS_TOKEN
 ```
 
-By design `exploit` performs **no live mutation**: canaries are benign, the cloud
-proof is a single read-only identity call, secret *values* are never exfiltrated,
-and every plan ends with teardown. `--arm` requires `--i-own-target` and prints
-the operator playbook; it does not act on the target.
+The generated PoCs are non-destructive: canaries are benign, the cloud proof is a
+single read-only identity call, and secret *values* are never exfiltrated.
+`--arm` (gated on `--i-own-target`) performs the live confirmation for the
+workflow-delivering PoCs (OIDC, runner): it creates a branch, delivers the PoC,
+lets the run trigger, confirms the canary in the logs, then **deletes the
+branch** — cleanup runs on every exit path. Injection/pwn-request PoCs are not
+auto-armed; `--arm` prints their manual playbook instead.
 
 Exit codes: `0` clean · `1` finding at/above the gate (default `high`) ·
 `2` usage/error · `3` capability not yet implemented.

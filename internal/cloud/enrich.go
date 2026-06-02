@@ -41,6 +41,8 @@ type FetchFunc func(ctx context.Context, opts Options) ([]GitHubTrust, error)
 // repoInfo is the per-repository context needed to match cloud trusts.
 type repoInfo struct {
 	full          string
+	platform      string // github | gitlab
+	repoNodeID    string
 	defaultBranch string
 	environments  []string
 	overBroad     bool
@@ -63,6 +65,12 @@ func Enrich(ctx context.Context, g *model.Graph, fetch FetchFunc, opts Options) 
 	bindings := 0
 	for _, t := range trusts {
 		for _, ri := range repos {
+			// A federation can only be assumed from the CI platform it trusts.
+			// (Matters for no-subject-condition trusts, which would otherwise
+			// match any repo; subject grammars already keep scoped trusts apart.)
+			if sp := t.SourcePlatform(); sp != "" && sp != ri.platform {
+				continue
+			}
 			if !t.Assumable(candidateSubjects(ri)) {
 				continue
 			}
@@ -79,7 +87,7 @@ func Enrich(ctx context.Context, g *model.Graph, fetch FetchFunc, opts Options) 
 			})
 			from := ri.oidcNodeID
 			if from == "" {
-				from = "gh:repo:" + ri.full
+				from = ri.repoNodeID
 			}
 			g.AddEdge(from, t.RoleARN, model.EdgeCanAssume)
 			bindings++
@@ -95,20 +103,40 @@ func Enrich(ctx context.Context, g *model.Graph, fetch FetchFunc, opts Options) 
 func summarizeRepos(g *model.Graph) []*repoInfo {
 	infos := map[string]*repoInfo{}
 	for _, n := range g.Nodes {
-		if n.Kind == model.NodeRepo {
-			infos[n.ID] = &repoInfo{
-				full:          strings.TrimPrefix(n.ID, "gh:repo:"),
-				defaultBranch: n.Attrs["default_branch"],
-				environments:  splitComma(n.Attrs["environments"]),
-			}
+		if n.Kind != model.NodeRepo {
+			continue
+		}
+		full, platform := "", ""
+		switch {
+		case strings.HasPrefix(n.ID, "gh:repo:"):
+			full, platform = strings.TrimPrefix(n.ID, "gh:repo:"), "github"
+		case strings.HasPrefix(n.ID, "gl:project:"):
+			full, platform = strings.TrimPrefix(n.ID, "gl:project:"), "gitlab"
+		default:
+			continue
+		}
+		infos[n.ID] = &repoInfo{
+			full:          full,
+			platform:      platform,
+			repoNodeID:    n.ID,
+			defaultBranch: n.Attrs["default_branch"],
+			environments:  splitComma(n.Attrs["environments"]),
 		}
 	}
 	for _, n := range g.Nodes {
 		if n.Kind != model.NodeOIDCTrust {
 			continue
 		}
-		full := strings.TrimPrefix(n.ID, "gh:oidc:")
-		if ri := infos["gh:repo:"+full]; ri != nil {
+		var repoID string
+		switch {
+		case strings.HasPrefix(n.ID, "gh:oidc:"):
+			repoID = "gh:repo:" + strings.TrimPrefix(n.ID, "gh:oidc:")
+		case strings.HasPrefix(n.ID, "gl:oidc:"):
+			repoID = "gl:project:" + strings.TrimPrefix(n.ID, "gl:oidc:")
+		default:
+			continue
+		}
+		if ri := infos[repoID]; ri != nil {
 			ri.oidcNodeID = n.ID
 			ri.overBroad = n.Attrs["over_broad"] == "true"
 		}
@@ -142,6 +170,13 @@ func candidateSubjects(ri *repoInfo) []string {
 	branch := ri.defaultBranch
 	if branch == "" {
 		branch = "main"
+	}
+	if ri.platform == "gitlab" {
+		// GitLab ID-token subject grammar:
+		// project_path:<group>/<project>:ref_type:branch:ref:<branch>
+		return []string{
+			"project_path:" + ri.full + ":ref_type:branch:ref:" + branch,
+		}
 	}
 	subs := []string{
 		"repo:" + ri.full + ":ref:refs/heads/" + branch,

@@ -44,6 +44,21 @@ func TestInRunContextNotEnvValue(t *testing.T) {
 	}
 }
 
+func TestInRunContextListItemBlockScalar(t *testing.T) {
+	// The most common form: a list-item run step with a block scalar. Lines inside
+	// `- run: |` must be detected as a run context, or CAM-INJ-001 misses them.
+	src := "on: pull_request_target\n" +
+		"jobs:\n" +
+		"  build:\n" +
+		"    steps:\n" +
+		"      - run: |\n" +
+		"          echo \"${{ github.event.issue.title }}\"\n"
+	d := Parse("t.yml", []byte(src))
+	if !d.InRunContext(5) { // the echo line inside `- run: |`
+		t.Error("line inside `- run: |` block scalar was not detected as a run context")
+	}
+}
+
 func TestTriggersUnquotedStillWorks(t *testing.T) {
 	d := Parse("t.yml", []byte("on:\n  push:\n  pull_request_target:\n"))
 	if !d.HasTrigger("push") || !d.HasTrigger("pull_request_target") {

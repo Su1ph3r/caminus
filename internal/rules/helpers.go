@@ -2,19 +2,27 @@ package rules
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Su1ph3r/caminus/internal/workflow"
 )
 
 // trim normalizes a line for use as finding evidence: collapse surrounding
-// whitespace and cap length so reports stay readable.
+// whitespace and cap length so reports stay readable. The cap is applied on a
+// UTF-8 rune boundary — CI YAML can contain multibyte runes (accented author
+// names, emoji in commit messages), and slicing mid-rune would emit invalid
+// UTF-8 into the JSON/SARIF reports.
 func trim(s string) string {
 	s = strings.TrimSpace(s)
 	const max = 160
-	if len(s) > max {
-		return s[:max] + "…"
+	if len(s) <= max {
+		return s
 	}
-	return s
+	cut := max
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
 }
 
 // firstLineMatching returns the index of the first line satisfying pred, or -1.

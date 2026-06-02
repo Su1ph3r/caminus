@@ -13,6 +13,45 @@ func policy(sub, extra string) string {
 		`"Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com"}` + subCond + extra + `}}]}`
 }
 
+// gitlabPolicy builds an AWS trust document federating the GitLab SaaS issuer.
+func gitlabPolicy(sub string) string {
+	return `{"Version":"2012-10-17","Statement":[{"Effect":"Allow",` +
+		`"Principal":{"Federated":"arn:aws:iam::1:oidc-provider/gitlab.com"},` +
+		`"Action":"sts:AssumeRoleWithWebIdentity",` +
+		`"Condition":{"StringLike":{"gitlab.com:sub":` + sub + `}}}]}`
+}
+
+func TestParseTrustPolicyGitLabIssuer(t *testing.T) {
+	ts, err := ParseTrustPolicy("arn:aws:iam::1:role/gl", "gl", "1",
+		gitlabPolicy(`"project_path:acme/widgets:ref_type:branch:ref:main"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ts) != 1 {
+		t.Fatalf("want 1 GitLab trust, got %d", len(ts))
+	}
+	if ts[0].Issuer != "gitlab.com" {
+		t.Errorf("issuer = %q, want gitlab.com", ts[0].Issuer)
+	}
+	if ts[0].SourcePlatform() != "gitlab" {
+		t.Errorf("SourcePlatform = %q, want gitlab", ts[0].SourcePlatform())
+	}
+	if ts[0].Broadness() != TrustScoped {
+		t.Errorf("broadness = %v, want scoped", ts[0].Broadness())
+	}
+}
+
+func TestParseTrustPolicyGitLabRefWildcard(t *testing.T) {
+	ts, err := ParseTrustPolicy("arn:aws:iam::1:role/gl", "gl", "1",
+		gitlabPolicy(`"project_path:acme/widgets:*"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ts) != 1 || ts[0].Broadness() != TrustRefWildcard {
+		t.Fatalf("want 1 ref-wildcard GitLab trust, got %+v", ts)
+	}
+}
+
 func TestParseTrustPolicyScoped(t *testing.T) {
 	ts, err := ParseTrustPolicy("arn:aws:iam::123456789012:role/deployer", "deployer", "123456789012",
 		policy(`"repo:acme/widgets:ref:refs/heads/main"`, ""))

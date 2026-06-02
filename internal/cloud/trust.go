@@ -21,6 +21,34 @@ import (
 // for these federations are prefixed with it (e.g. "<issuer>:sub").
 const GitHubOIDCIssuer = "token.actions.githubusercontent.com"
 
+// DefaultGitLabIssuer is the GitLab SaaS OIDC issuer host. Self-managed GitLab
+// uses its own host; isGitLabIssuer recognizes the common cases.
+const DefaultGitLabIssuer = "gitlab.com"
+
+// isGitLabIssuer reports whether an OIDC issuer host is a GitLab instance. SaaS
+// is gitlab.com; self-managed hosts conventionally contain "gitlab". A host that
+// matches neither is simply not auto-attributed to GitLab (documented limit).
+func isGitLabIssuer(host string) bool {
+	host = strings.TrimPrefix(strings.TrimPrefix(host, "https://"), "http://")
+	return host == DefaultGitLabIssuer || strings.Contains(host, "gitlab")
+}
+
+// SourcePlatform reports the CI platform a federation trusts, derived from its
+// issuer. An empty issuer defaults to "github" (matching the Issuer field's
+// documented default), so the enrichment platform gate stays active rather than
+// silently disengaging for an issuer-less trust. An unrecognized non-empty issuer
+// returns "" (gate skipped — the trust is matched on subject grammar alone).
+func (t GitHubTrust) SourcePlatform() string {
+	switch {
+	case t.Issuer == "" || t.Issuer == GitHubOIDCIssuer || strings.Contains(t.Issuer, "githubusercontent"):
+		return "github"
+	case isGitLabIssuer(t.Issuer):
+		return "gitlab"
+	default:
+		return ""
+	}
+}
+
 // GitHubTrust is a parsed GitHub-OIDC federation granted by a cloud identity.
 // It is provider-neutral: the same subject-matching logic applies whether the
 // federation is an AWS IAM role trust policy, a GCP Workload Identity Federation
@@ -29,6 +57,7 @@ const GitHubOIDCIssuer = "token.actions.githubusercontent.com"
 // provider-appropriate terms (see ResourceID/ResourceNoun).
 type GitHubTrust struct {
 	Provider    string   `json:"provider"`     // aws | gcp | azure (empty defaults to aws)
+	Issuer      string   `json:"issuer"`       // CI OIDC issuer host (github/gitlab); empty = github
 	RoleARN     string   `json:"role_arn"`     // unique resource id: ARN / SA email / app credential
 	RoleName    string   `json:"role_name"`    // human label: role name / SA email / app display name
 	Account     string   `json:"account"`      // AWS account / GCP project / Azure tenant
@@ -98,22 +127,31 @@ func (t GitHubTrust) Broadness() Broadness {
 	return worst
 }
 
-// classifyPattern judges a single sub pattern. A GitHub sub looks like
-// "repo:<owner>/<repo>:<context>"; a wildcard in the owner/repo segment means
-// any repository, a wildcard only in the trailing context means any ref/env.
+// splitSubject separates a CI OIDC subject into its identity segment (the
+// repo/project) and its trailing context (ref/environment/…), handling both the
+// GitHub grammar ("repo:<owner>/<repo>:<context>") and the GitLab grammar
+// ("project_path:<group>/<project>:ref_type:<t>:ref:<ref>").
+func splitSubject(p string) (identity, context string) {
+	rest := p
+	for _, pre := range []string{"repo:", "project_path:"} {
+		if strings.HasPrefix(p, pre) {
+			rest = p[len(pre):]
+			break
+		}
+	}
+	if i := strings.Index(rest, ":"); i >= 0 {
+		return rest[:i], rest[i+1:]
+	}
+	return rest, ""
+}
+
+// classifyPattern judges a single sub pattern. A wildcard in the identity
+// (owner/repo or group/project) segment means any repository/project; a wildcard
+// only in the trailing context means any ref/env.
 func classifyPattern(p string) Broadness {
-	rest := strings.TrimPrefix(p, "repo:")
-	// owner/repo is everything up to the third ':' boundary (the context start)
-	repoSeg := rest
-	if i := strings.Index(rest, ":"); i >= 0 {
-		repoSeg = rest[:i]
-	}
-	if strings.Contains(repoSeg, "*") || strings.Contains(repoSeg, "?") || p == "*" {
+	identity, ctx := splitSubject(p)
+	if strings.Contains(identity, "*") || strings.Contains(identity, "?") || p == "*" {
 		return TrustRepoWildcard
-	}
-	ctx := ""
-	if i := strings.Index(rest, ":"); i >= 0 {
-		ctx = rest[i+1:]
 	}
 	if ctx == "" || strings.Contains(ctx, "*") || strings.Contains(ctx, "?") {
 		return TrustRefWildcard
@@ -229,12 +267,16 @@ func ParseTrustPolicy(roleARN, roleName, account, doc string) ([]GitHubTrust, er
 			continue
 		}
 		feds, err := flexStrings(s.Principal.Federated)
-		if err != nil || !federatesGitHub(feds) {
+		if err != nil {
 			continue
 		}
-		t := GitHubTrust{Provider: "aws", RoleARN: roleARN, RoleName: roleName, Account: account}
-		subKey := GitHubOIDCIssuer + ":sub"
-		audKey := GitHubOIDCIssuer + ":aud"
+		issuer, ok := ciIssuer(feds)
+		if !ok {
+			continue
+		}
+		t := GitHubTrust{Provider: "aws", Issuer: issuer, RoleARN: roleARN, RoleName: roleName, Account: account}
+		subKey := issuer + ":sub"
+		audKey := issuer + ":aud"
 		for _, vals := range s.Condition { // StringEquals / StringLike / …
 			// A present-but-unparsable :sub/:aud is a hard error: silently
 			// dropping it would make HasSub=false and misclassify the trust as
@@ -300,13 +342,22 @@ func flexStrings(raw json.RawMessage) ([]string, error) {
 	return []string{s}, nil
 }
 
-func federatesGitHub(principals []string) bool {
+// ciIssuer inspects the Federated principals of a trust statement and returns
+// the CI OIDC issuer host it federates (GitHub Actions or GitLab) and whether one
+// was found. Principals look like "arn:aws:iam::<acct>:oidc-provider/<issuer>".
+func ciIssuer(principals []string) (string, bool) {
 	for _, p := range principals {
-		if strings.HasSuffix(p, "oidc-provider/"+GitHubOIDCIssuer) || strings.Contains(p, GitHubOIDCIssuer) {
-			return true
+		if i := strings.Index(p, "oidc-provider/"); i >= 0 {
+			host := p[i+len("oidc-provider/"):]
+			if host == GitHubOIDCIssuer || isGitLabIssuer(host) {
+				return host, true
+			}
+		}
+		if strings.Contains(p, GitHubOIDCIssuer) {
+			return GitHubOIDCIssuer, true
 		}
 	}
-	return false
+	return "", false
 }
 
 func containsFold(haystack []string, needle string) bool {

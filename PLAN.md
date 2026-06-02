@@ -142,21 +142,26 @@ Multi-platform enum + multi-cloud blast radius.
   neutral `GitHubTrust` + per-cloud CAM-OIDC-002 wording. Default build links 0
   cloud SDKs; GCP/Azure isolated behind `-tags cloud`.
 
-## M3 → v0.4.0 (generate stage done)
+## M3 → v0.4.0–v0.5.0 (done)
 
-`exploit` — non-destructive PoC generation for confirmable findings.
-- [x] **`internal/exploit`** + `exploit` command: confirmable findings (graph
-  `-i` and/or `scan --format json --scan`) → artifact (attack input / pipeline
-  payload with a benign canary) + reversible Deliver/Evidence/Cleanup plan
-  (`PLAN.md` or `-o -`).
-- [x] **Generators:** injection (CAM-INJ-001/CAM-GL-INJ-001), pwn-request
-  (CAM-PPE-001, secret presence not value), runner (CAM-RUN-001/CAM-GL-RUN-001),
-  OIDC→cloud (CAM-OIDC-002; AWS/GCP/Azure × GitHub/GitLab; read-only identity
-  call). Deterministic canary; tests + cmd tests.
-- [x] **Restraint:** generation-only, no live mutation; `--arm` gated on
-  `--i-own-target` prints the reversible playbook only.
+`exploit` — dynamic confirmation for confirmable findings.
+- [x] **Generate (v0.4.0):** `internal/exploit` + `exploit` command. Confirmable
+  findings (graph `-i` and/or `scan --format json --scan`) → artifact (attack
+  input / pipeline payload with a benign canary) + reversible
+  Deliver/Evidence/Cleanup plan. Generators for injection (CAM-INJ-001/
+  CAM-GL-INJ-001), pwn-request (CAM-PPE-001, secret presence not value), runner
+  (CAM-RUN-001/CAM-GL-RUN-001), OIDC→cloud (CAM-OIDC-002; AWS/GCP/Azure ×
+  GitHub/GitLab). Deterministic canary; read-only by design.
+- [x] **Live arming (v0.5.0):** `--arm --i-own-target` delivers a workflow PoC to
+  a branch on an owned target, triggers it, confirms the canary in run logs, and
+  deletes the branch (cleanup deferred on every path; `--keep` opts out). Token
+  host-gated; non-armable PoCs fall back to the playbook. Scripted-transport
+  tests.
+- [x] **GitLab→cloud (v0.5.0):** `cloud` resolves OIDC→cloud for GitLab graphs —
+  issuer-aware trust model, grammar-agnostic subject classify, platform-gated
+  matching; CAM-OIDC-002 fires for GitLab projects.
 
 ## Later milestones
-- **M3 cont.:** live API-driven arming (create branch → run → capture canary →
-  auto-cleanup); GitLab→cloud subject matching; indirect-PPE; structural YAML;
-  Vinculum + Ariadne export.
+- **M3.5 / detection:** indirect-PPE; structural YAML (`-tags yaml`).
+- **M4 / pipeline:** Vinculum + Ariadne export; GoReleaser/Homebrew/Scoop, a
+  GitHub Action wrapper.

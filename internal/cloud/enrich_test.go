@@ -106,6 +106,71 @@ func TestEnrichScopedToOtherRepoNoMatch(t *testing.T) {
 	}
 }
 
+func gitlabGraphWithEntry() *model.Graph {
+	g := model.NewGraph()
+	g.AddNode(&model.Node{ID: "gl:project:acme/widgets", Label: "acme/widgets", Kind: model.NodeRepo,
+		Attrs: map[string]string{"default_branch": "main"}})
+	g.AddNode(&model.Node{ID: "gl:oidc:acme/widgets", Label: "oidc", Kind: model.NodeOIDCTrust,
+		Attrs: map[string]string{"over_broad": "false"}})
+	g.AddNode(&model.Node{ID: "glpipe", Label: "deploy", Kind: model.NodePipeline,
+		Attrs: map[string]string{"entrypoint": "true"}})
+	g.AddEdge("gl:project:acme/widgets", "glpipe", model.EdgeContains)
+	g.AddEdge("gl:project:acme/widgets", "gl:oidc:acme/widgets", model.EdgeFederates)
+	return g
+}
+
+func TestEnrichGitLabProjectMatch(t *testing.T) {
+	g := gitlabGraphWithEntry()
+	role := GitHubTrust{
+		Provider: "aws", Issuer: "gitlab.com",
+		RoleARN: "arn:aws:iam::1:role/gl-deployer", RoleName: "gl-deployer", Account: "1",
+		SubPatterns: []string{"project_path:acme/widgets:*"}, HasSub: true,
+	}
+	n, err := Enrich(context.Background(), g, fetchTrusts(role), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n < 1 {
+		t.Fatalf("expected a GitLab→cloud binding, got %d", n)
+	}
+	var edge bool
+	for _, e := range g.Edges {
+		if e.From == "gl:oidc:acme/widgets" && e.To == role.RoleARN && e.Kind == model.EdgeCanAssume {
+			edge = true
+		}
+	}
+	if !edge {
+		t.Error("expected can-assume edge from the GitLab OIDC node to the cloud role")
+	}
+	var found bool
+	for _, f := range g.Findings {
+		if f.RuleID == "CAM-OIDC-002" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected CAM-OIDC-002 for the GitLab project")
+	}
+}
+
+func TestEnrichPlatformGate(t *testing.T) {
+	// A no-subject-condition GitHub federation must NOT be reported as assumable
+	// from a GitLab project (and vice versa) — only the matching CI platform.
+	glGraph := gitlabGraphWithEntry()
+	ghTrust := GitHubTrust{Provider: "aws", Issuer: GitHubOIDCIssuer,
+		RoleARN: "arn:aws:iam::1:role/gh-any", HasSub: false}
+	if n, _ := Enrich(context.Background(), glGraph, fetchTrusts(ghTrust), Options{}); n != 0 {
+		t.Errorf("GitHub no-subject trust matched a GitLab project (%d bindings); platform gate failed", n)
+	}
+
+	ghGraph := graphWithEntry()
+	glTrust := GitHubTrust{Provider: "aws", Issuer: "gitlab.com",
+		RoleARN: "arn:aws:iam::1:role/gl-any", HasSub: false}
+	if n, _ := Enrich(context.Background(), ghGraph, fetchTrusts(glTrust), Options{}); n != 0 {
+		t.Errorf("GitLab no-subject trust matched a GitHub repo (%d bindings); platform gate failed", n)
+	}
+}
+
 func TestEnrichRepoWildcardIsCritical(t *testing.T) {
 	g := graphWithEntry()
 	role := GitHubTrust{

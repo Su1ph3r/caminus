@@ -106,6 +106,15 @@ func loadGraph(path string) (*model.Graph, error) {
 	if g.Nodes == nil {
 		g.Nodes = map[string]*model.Node{}
 	}
+	// A JSON null node value (e.g. {"nodes":{"x":null}} in a hand-edited or
+	// truncated graph.json) unmarshals to a present key with a nil *Node, which
+	// would panic every consumer that dereferences n.Kind. Such an entry carries
+	// no data; drop it. Edges referencing it are already handled as dangling.
+	for id, n := range g.Nodes {
+		if n == nil {
+			delete(g.Nodes, id)
+		}
+	}
 	return &g, nil
 }
 

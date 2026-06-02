@@ -85,7 +85,10 @@ func runCloud(argv []string) int {
 	}
 	if recorder != nil {
 		if err := recorder.Save(); err != nil {
+			// The whole point of --record is to produce a reusable cassette; a
+			// failed write must not report success.
 			fmt.Fprintf(os.Stderr, "caminus cloud: save cassette: %v\n", err)
+			return 2
 		}
 	}
 

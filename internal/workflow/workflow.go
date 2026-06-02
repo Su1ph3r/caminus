@@ -46,7 +46,11 @@ var (
 	reOnKey = regexp.MustCompile(`^["']?on["']?\s*:\s*(.*?)\s*$`)
 	// reChildKey also tolerates a quoted child key ("pull_request_target":).
 	reChildKey = regexp.MustCompile(`^\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
-	reRunKey   = regexp.MustCompile(`^run:\s*([|>].*)?$`)
+	// reRunKey tolerates a leading list-item dash so the very common block-scalar
+	// step form `- run: |` is recognized as a run context (the trimmed parent line
+	// in the dedent walk is "- run: |"). Without the dash, multi-line run blocks —
+	// the most common expression-injection sink — were silently missed.
+	reRunKey = regexp.MustCompile(`^(?:-\s+)?run:\s*([|>].*)?$`)
 	// reRunInline is anchored to a YAML key position (line start, optionally a
 	// list-item dash) so that the substring "run: " inside a quoted value
 	// (e.g. an env: string "please run: ...") is not mistaken for a run step.

@@ -52,3 +52,17 @@ func TestExecContextBOM(t *testing.T) {
 		t.Error("BOM before script: defeated ExecContext detection")
 	}
 }
+
+func TestExecContextNotInQuotedValue(t *testing.T) {
+	// The substring "script:" inside a quoted value is data, not a shell-exec
+	// context — it must not make the line an ExecContext (false-positive guard).
+	d := Parse(".gitlab-ci.yml", []byte("job:\n  variables:\n    NOTE: \"please script: do thing\"\n  stage: build\n"))
+	if d.ExecContext(2) { // the NOTE value line
+		t.Error("a quoted value containing 'script:' was wrongly detected as a shell-exec context")
+	}
+	// A real inline script: key must still be detected.
+	d2 := Parse(".gitlab-ci.yml", []byte("job:\n  script: echo hi\n"))
+	if !d2.ExecContext(1) {
+		t.Error("a real inline script: key was not detected")
+	}
+}

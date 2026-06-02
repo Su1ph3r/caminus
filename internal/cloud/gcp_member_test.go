@@ -30,7 +30,7 @@ func TestParseGCPMember(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			pat, hasSub, class := parseGCPMember(c.member, pools)
+			pat, hasSub, _, class := parseGCPMember(c.member, pools)
 			if class != c.class {
 				t.Fatalf("class = %v, want %v", class, c.class)
 			}
@@ -50,7 +50,7 @@ func TestParseGCPMemberBroadness(t *testing.T) {
 	pool := "projects/p/locations/global/workloadIdentityPools/gh"
 	pools := map[string]bool{pool: true}
 	mk := func(suffix string) GitHubTrust {
-		pat, hasSub, _ := parseGCPMember("principalSet://iam.googleapis.com/"+pool+suffix, pools)
+		pat, hasSub, _, _ := parseGCPMember("principalSet://iam.googleapis.com/"+pool+suffix, pools)
 		return GitHubTrust{Provider: "gcp", SubPatterns: pat, HasSub: hasSub}
 	}
 	if b := mk("/attribute.repository/acme/widgets").Broadness(); b != TrustRefWildcard {

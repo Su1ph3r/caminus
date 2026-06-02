@@ -24,6 +24,7 @@ func runScan(argv []string) int {
 	minSev := fs.String("min-severity", "info", "report findings at or above: critical|high|medium|low|info")
 	gate := fs.String("gate", "high", "exit non-zero if any finding at or above this severity is reported (use 'none' to disable)")
 	platform := fs.String("platform", "auto", "pipeline platform: auto|github|gitlab")
+	failIncomplete := fs.Bool("fail-on-incomplete", false, "exit non-zero if any targeted file could not be analyzed")
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, `caminus scan — static attack-surface analysis of CI/CD pipeline definitions
 
@@ -96,8 +97,17 @@ OPTIONS
 	}
 
 	var findings []model.Finding
+	unreadable := 0
 	for _, f := range files {
-		for _, fnd := range analyzeFile(f, *platform) {
+		fnds, err := analyzeFile(f, *platform)
+		if err != nil {
+			// A file that was discovered but could not be parsed/read is UNASSESSED,
+			// not clean — count it so the gate can't silently pass over the gap.
+			fmt.Fprintf(os.Stderr, "caminus scan: %s: %v\n", f, err)
+			unreadable++
+			continue
+		}
+		for _, fnd := range fnds {
 			if fnd.Severity.Rank() >= min.Rank() {
 				findings = append(findings, fnd)
 			}
@@ -122,34 +132,47 @@ OPTIONS
 		return 2
 	}
 
+	gateHit := false
 	if gateEnabled {
 		for _, f := range findings {
 			if f.Severity.Rank() >= gateSev.Rank() {
-				return 1
+				gateHit = true
+				break
 			}
 		}
+	}
+	if unreadable > 0 {
+		fmt.Fprintf(os.Stderr,
+			"caminus scan: warning: %d file(s) UNASSESSED (could not be analyzed) — scan is INCOMPLETE, not necessarily clean\n",
+			unreadable)
+	}
+	if gateHit {
+		return 1
+	}
+	// Default stays exit 0 on an incomplete-but-ungated scan (backward compatible);
+	// opt in to a hard failure for CI with --fail-on-incomplete.
+	if *failIncomplete && unreadable > 0 {
+		return 2
 	}
 	return 0
 }
 
 // analyzeFile loads a single pipeline file with the right parser and runs the
 // matching rule set, dispatching on the detected (or forced) platform.
-func analyzeFile(path, override string) []model.Finding {
+func analyzeFile(path, override string) ([]model.Finding, error) {
 	switch detectPlatform(path, override) {
 	case "gitlab":
 		doc, err := gitlabci.Load(path)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
-			return nil
+			return nil, err
 		}
-		return rules.RunGitLab(doc)
+		return rules.RunGitLab(doc), nil
 	default:
 		doc, err := workflow.Load(path)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "caminus scan: %v\n", err)
-			return nil
+			return nil, err
 		}
-		return rules.Run(doc, rules.Default())
+		return rules.Run(doc, rules.Default()), nil
 	}
 }
 

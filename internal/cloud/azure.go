@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -112,11 +113,13 @@ func FetchAzure(ctx context.Context, opts Options) ([]GitHubTrust, error) {
 			label = app.AppID
 		}
 		for _, fic := range fics {
-			if !issuerIsGitHub(fic.Issuer) {
+			issuer, ok := ciIssuerHost(fic.Issuer)
+			if !ok {
 				continue
 			}
 			out = append(out, GitHubTrust{
 				Provider:    "azure",
+				Issuer:      issuer,
 				RoleARN:     app.AppID,
 				RoleName:    label,
 				Account:     tenant,
@@ -129,8 +132,17 @@ func FetchAzure(ctx context.Context, opts Options) ([]GitHubTrust, error) {
 	return out, nil
 }
 
-func issuerIsGitHub(issuer string) bool {
-	return trimSlash(issuer) == gitHubAzureIssuer
+// ciIssuerHost classifies a FIC issuer URL as a CI OIDC issuer (GitHub or
+// GitLab) and returns the issuer host to record on the trust.
+func ciIssuerHost(issuer string) (string, bool) {
+	u := trimSlash(issuer)
+	if u == gitHubAzureIssuer {
+		return GitHubOIDCIssuer, true
+	}
+	if isGitLabIssuer(u) {
+		return strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), true
+	}
+	return "", false
 }
 
 func trimSlash(s string) string {

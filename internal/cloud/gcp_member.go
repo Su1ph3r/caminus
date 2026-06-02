@@ -30,7 +30,7 @@ const (
 // condition at all, and a classification telling the caller whether to build a
 // trust (memberMapped), log-and-skip (memberUnmappedAttr), or ignore silently
 // (memberNotGitHub).
-func parseGCPMember(member string, githubPools map[string]bool) (patterns []string, hasSub bool, class gcpMemberClass) {
+func parseGCPMember(member string, ciPools map[string]bool) (patterns []string, hasSub bool, pool string, class gcpMemberClass) {
 	rest := ""
 	switch {
 	case strings.HasPrefix(member, prefixPrincipalSet):
@@ -38,52 +38,51 @@ func parseGCPMember(member string, githubPools map[string]bool) (patterns []stri
 	case strings.HasPrefix(member, prefixPrincipal):
 		rest = member[len(prefixPrincipal):]
 	default:
-		return nil, false, memberNotGitHub
+		return nil, false, "", memberNotGitHub
 	}
 
 	// Identify the pool this member targets. Match the longest pool name that is
 	// a prefix, so a pool whose name is a prefix of another does not shadow it.
-	var pool string
-	for p := range githubPools {
+	for p := range ciPools {
 		if (rest == p || strings.HasPrefix(rest, p+"/")) && len(p) > len(pool) {
 			pool = p
 		}
 	}
 	if pool == "" {
-		return nil, false, memberNotGitHub
+		return nil, false, "", memberNotGitHub
 	}
 
 	suffix := strings.TrimPrefix(rest[len(pool):], "/")
 	switch {
 	case suffix == "" || suffix == "*":
-		// Whole-pool binding: any identity federated through this GitHub pool can
+		// Whole-pool binding: any identity federated through this CI pool can
 		// impersonate the SA — no subject condition.
-		return nil, false, memberMapped
+		return nil, false, pool, memberMapped
 	case strings.HasPrefix(suffix, "attribute.repository/"):
 		// attribute.repository maps to the GitHub "repository" claim (owner/repo).
 		repo := strings.TrimPrefix(suffix, "attribute.repository/")
 		if repo == "" {
-			return nil, false, memberUnmappedAttr
+			return nil, false, pool, memberUnmappedAttr
 		}
-		return []string{"repo:" + repo + ":*"}, true, memberMapped
+		return []string{"repo:" + repo + ":*"}, true, pool, memberMapped
 	case strings.HasPrefix(suffix, "attribute.repository_owner/"):
 		owner := strings.TrimPrefix(suffix, "attribute.repository_owner/")
 		if owner == "" {
-			return nil, false, memberUnmappedAttr
+			return nil, false, pool, memberUnmappedAttr
 		}
-		return []string{"repo:" + owner + "/*:*"}, true, memberMapped
+		return []string{"repo:" + owner + "/*:*"}, true, pool, memberMapped
 	case strings.HasPrefix(suffix, "subject/"):
 		// google.subject is conventionally mapped from assertion.sub, i.e. the
-		// raw GitHub OIDC subject.
+		// raw CI OIDC subject (GitHub repo:… or GitLab project_path:…).
 		sub := strings.TrimPrefix(suffix, "subject/")
 		if sub == "" {
-			return nil, false, memberUnmappedAttr
+			return nil, false, pool, memberUnmappedAttr
 		}
-		return []string{sub}, true, memberMapped
+		return []string{sub}, true, pool, memberMapped
 	default:
-		// A custom attribute mapping we can't translate to a GitHub subject; flag
-		// it for the operator rather than guess (false-positive-averse).
-		return nil, false, memberUnmappedAttr
+		// A custom attribute mapping we can't translate to a CI subject; flag it
+		// for the operator rather than guess (false-positive-averse).
+		return nil, false, pool, memberUnmappedAttr
 	}
 }
 

@@ -121,7 +121,7 @@ func (e *Enumerator) Enumerate(ctx context.Context, _ platform.Credentials, t pl
 func (e *Enumerator) listRepos(ctx context.Context, t platform.Target) ([]repo, error) {
 	if t.Repo != "" {
 		var r repo
-		if err := e.c.getJSON(ctx, "/repos/"+t.Org+"/"+t.Repo, &r); err != nil {
+		if err := e.c.getJSON(ctx, "/repos/"+seg(t.Org)+"/"+seg(t.Repo), &r); err != nil {
 			return nil, err
 		}
 		if r.FullName == "" {
@@ -130,7 +130,7 @@ func (e *Enumerator) listRepos(ctx context.Context, t platform.Target) ([]repo, 
 		return []repo{r}, nil
 	}
 	var out []repo
-	err := e.c.getList(ctx, "/orgs/"+t.Org+"/repos?type=all", func(b []byte) error {
+	err := e.c.getList(ctx, "/orgs/"+seg(t.Org)+"/repos?type=all", func(b []byte) error {
 		var page []repo
 		if err := json.Unmarshal(b, &page); err != nil {
 			return err
@@ -159,7 +159,7 @@ func (e *Enumerator) enumerateRepo(ctx context.Context, r repo, g *model.Graph) 
 
 func (e *Enumerator) enumerateWorkflows(ctx context.Context, r repo, repoID string, g *model.Graph) {
 	var wl workflowList
-	if err := e.c.getJSON(ctx, "/repos/"+r.FullName+"/actions/workflows", &wl); err != nil {
+	if err := e.c.getJSON(ctx, "/repos/"+repoPath(r.FullName)+"/actions/workflows", &wl); err != nil {
 		if e.skip("workflows", r.FullName, err) {
 			markIncomplete(g, repoID, "workflows")
 		}
@@ -195,7 +195,7 @@ func (e *Enumerator) enumerateWorkflows(ctx context.Context, r repo, repoID stri
 
 func (e *Enumerator) fetchContent(ctx context.Context, fullName, path string) ([]byte, bool) {
 	var cr contentResp
-	if err := e.c.getJSON(ctx, "/repos/"+fullName+"/contents/"+path, &cr); err != nil {
+	if err := e.c.getJSON(ctx, "/repos/"+repoPath(fullName)+"/contents/"+path, &cr); err != nil {
 		e.skip("workflow content", fullName+"/"+path, err)
 		return nil, false
 	}
@@ -239,7 +239,7 @@ func (e *Enumerator) listSecrets(ctx context.Context, path string) ([]ghSecret, 
 }
 
 func (e *Enumerator) enumerateRepoRunners(ctx context.Context, r repo, repoID string, g *model.Graph) {
-	runners, err := e.listRunners(ctx, "/repos/"+r.FullName+"/actions/runners")
+	runners, err := e.listRunners(ctx, "/repos/"+repoPath(r.FullName)+"/actions/runners")
 	if err != nil {
 		if e.skip("repo runners", r.FullName, err) {
 			markIncomplete(g, repoID, "runners")
@@ -250,7 +250,7 @@ func (e *Enumerator) enumerateRepoRunners(ctx context.Context, r repo, repoID st
 }
 
 func (e *Enumerator) enumerateOrgRunners(ctx context.Context, org string, g *model.Graph) {
-	runners, err := e.listRunners(ctx, "/orgs/"+org+"/actions/runners")
+	runners, err := e.listRunners(ctx, "/orgs/"+seg(org)+"/actions/runners")
 	if err != nil {
 		if e.skip("org runners", org, err) {
 			markIncomplete(g, "gh:org:"+org, "runners")
@@ -283,7 +283,7 @@ func (e *Enumerator) addRunners(runners []ghRunner, scope, ownerID string, g *mo
 }
 
 func (e *Enumerator) enumerateRepoSecrets(ctx context.Context, r repo, repoID string, g *model.Graph) {
-	secrets, err := e.listSecrets(ctx, "/repos/"+r.FullName+"/actions/secrets")
+	secrets, err := e.listSecrets(ctx, "/repos/"+repoPath(r.FullName)+"/actions/secrets")
 	if err != nil {
 		if e.skip("repo secrets", r.FullName, err) {
 			markIncomplete(g, repoID, "secrets")
@@ -298,7 +298,7 @@ func (e *Enumerator) enumerateRepoSecrets(ctx context.Context, r repo, repoID st
 }
 
 func (e *Enumerator) enumerateOrgSecrets(ctx context.Context, org string, g *model.Graph) {
-	secrets, err := e.listSecrets(ctx, "/orgs/"+org+"/actions/secrets")
+	secrets, err := e.listSecrets(ctx, "/orgs/"+seg(org)+"/actions/secrets")
 	if err != nil {
 		if e.skip("org secrets", org, err) {
 			markIncomplete(g, "gh:org:"+org, "secrets")
@@ -321,7 +321,7 @@ func (e *Enumerator) enumerateOrgSecrets(ctx context.Context, org string, g *mod
 // harder to reach, so the graph notes them on the repo node.
 func (e *Enumerator) enumerateEnvironments(ctx context.Context, r repo, repoNode *model.Node) {
 	var envs []ghEnvironment
-	err := e.c.getList(ctx, "/repos/"+r.FullName+"/environments", func(b []byte) error {
+	err := e.c.getList(ctx, "/repos/"+repoPath(r.FullName)+"/environments", func(b []byte) error {
 		var el envList
 		if err := json.Unmarshal(b, &el); err != nil {
 			return err
@@ -353,7 +353,7 @@ func (e *Enumerator) enumerateEnvironments(ctx context.Context, r repo, repoNode
 
 func (e *Enumerator) enumerateOIDC(ctx context.Context, r repo, repoID string, g *model.Graph) {
 	var sub oidcSub
-	if err := e.c.getJSON(ctx, "/repos/"+r.FullName+"/actions/oidc/customization/sub", &sub); err != nil {
+	if err := e.c.getJSON(ctx, "/repos/"+repoPath(r.FullName)+"/actions/oidc/customization/sub", &sub); err != nil {
 		if e.skip("oidc sub", r.FullName, err) {
 			markIncomplete(g, repoID, "oidc")
 		}
@@ -378,7 +378,7 @@ func (e *Enumerator) enumerateBranchProtection(ctx context.Context, r repo, repo
 	if r.DefaultBranch == "" {
 		return
 	}
-	err := e.c.getJSON(ctx, "/repos/"+r.FullName+"/branches/"+r.DefaultBranch+"/protection", nil)
+	err := e.c.getJSON(ctx, "/repos/"+repoPath(r.FullName)+"/branches/"+seg(r.DefaultBranch)+"/protection", nil)
 	switch {
 	case err == nil:
 		repoNode.Attrs["default_branch_protected"] = "true"

@@ -54,6 +54,20 @@ func NewClient(creds platform.Credentials, hc *http.Client) *Client {
 	return c
 }
 
+// seg escapes a single GitHub API path segment (owner, org, repo, or branch) so
+// a value with reserved characters cannot alter the request path structure.
+func seg(s string) string { return url.PathEscape(s) }
+
+// repoPath escapes an "owner/repo" full name segment-wise, preserving the "/"
+// separator (a wholesale PathEscape would encode the slash and break the path).
+func repoPath(fullName string) string {
+	parts := strings.SplitN(fullName, "/", 2)
+	for i := range parts {
+		parts[i] = url.PathEscape(parts[i])
+	}
+	return strings.Join(parts, "/")
+}
+
 // sameHost reports whether rawURL targets the configured API host. Relative
 // endpoints (those used internally) are same-host by construction. This gates
 // where the token may be sent and which pagination URLs may be followed, so a
