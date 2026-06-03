@@ -39,28 +39,33 @@ changelog:
       - '^test:'
       - '^chore:'
 
-# Homebrew tap. Requires a `Su1ph3r/homebrew-tap` repo and a PAT with write
-# access to it in the TAP_GITHUB_TOKEN secret. SKIP_PKG_PUBLISH (set by the
-# release workflow when that secret is absent) lets binary releases succeed
-# before the tap is set up.
-brews:
+# Homebrew tap (macOS, via cask — GoReleaser deprecated `brews:`/formulas in
+# favor of `homebrew_casks:`). Requires a `Su1ph3r/homebrew-tap` repo and a PAT
+# with write access to it in the TAP_GITHUB_TOKEN secret. SKIP_PKG_PUBLISH (set
+# by the release workflow when that secret is absent) lets binary releases
+# succeed before the tap is set up. The post-install hook strips the macOS
+# quarantine xattr so Gatekeeper does not block the unsigned binary.
+homebrew_casks:
   - name: caminus
+    binaries:
+      - caminus
     repository:
       owner: Su1ph3r
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: Formula
+    directory: Casks
     homepage: "https://github.com/Su1ph3r/caminus"
     description: "Multi-platform CI/CD pipeline attack-surface scanner and attack-path synthesizer"
-    license: "MIT"
     skip_upload: "{{ .Env.SKIP_PKG_PUBLISH }}"
     commit_author:
       name: release-bot
       email: release-bot@users.noreply.github.com
-    install: |
-      bin.install "caminus"
-    test: |
-      system "#{bin}/caminus", "version"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/caminus"]
+          end
 
 # Scoop bucket (Windows). Requires a `Su1ph3r/scoop-bucket` repo and the same
 # TAP_GITHUB_TOKEN. Gated identically by SKIP_PKG_PUBLISH.

@@ -3,6 +3,19 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed — packaging
+- **Migrated the deprecated GoReleaser `brews:` formula block to
+  `homebrew_casks:`.** GoReleaser deprecated formula generation in favor of
+  casks; `goreleaser check` failed with a deprecation error. The cask drops the
+  formula-only `install:`/`test:` stanzas (a binary cask installs the artifact
+  directly) and adds a `postflight` hook that strips the macOS quarantine xattr
+  so Gatekeeper does not block the unsigned binary. Tap repo, `TAP_GITHUB_TOKEN`,
+  and `SKIP_PKG_PUBLISH` gating are unchanged. Verified with `goreleaser check`
+  (clean) and `goreleaser release --snapshot --clean` (archives + `checksums.txt`
+  + cask + scoop manifest all generated, sha256s consistent).
+
 ## [0.6.0] — 2026-06-03
 
 Milestones **M3.5 and M4 complete**: indirect Poisoned Pipeline Execution

@@ -186,11 +186,18 @@ self-scan still clean.
 ## M4 → distribution (in progress)
 
 Getting Caminus into others' hands.
-- [x] **Packaging** — GoReleaser publishes Homebrew (`Su1ph3r/homebrew-tap`) and
-  Scoop (`Su1ph3r/scoop-bucket`) alongside the cross-platform archives, gated by
-  `SKIP_PKG_PUBLISH` so releases work before the tap/bucket + `TAP_GITHUB_TOKEN`
-  exist (`RELEASING.md`). Pre-hook changed `go mod tidy` → `go mod download` so
-  the build-tag-only deps are not pruned.
+- [x] **Packaging** — GoReleaser publishes a Homebrew **cask** (`Su1ph3r/homebrew-tap`)
+  and a Scoop manifest (`Su1ph3r/scoop-bucket`) alongside the cross-platform
+  archives, gated by `SKIP_PKG_PUBLISH` so releases work before the tap/bucket +
+  `TAP_GITHUB_TOKEN` exist (`RELEASING.md`). Pre-hook changed `go mod tidy` →
+  `go mod download` so the build-tag-only deps are not pruned. **Migrated the
+  deprecated `brews:` formula block to `homebrew_casks:`** (GoReleaser deprecated
+  formula generation; cask drops `install:`/`test:`, adds a Gatekeeper-quarantine
+  postflight hook for the unsigned binary). **Verified 2026-06-03:** `goreleaser
+  check` is clean, and `goreleaser release --snapshot --clean` builds all 6
+  os/arch binaries, archives, `checksums.txt`, a well-formed cask
+  (`dist/homebrew/Casks/caminus.rb`, sha256s matching checksums), and the Scoop
+  manifest; the built binary reports its ldflags version.
 - [x] **GitHub Action** — Docker action (`action.yml` + `Dockerfile` +
   `entrypoint.sh`) runs `caminus scan` in CI with path/platform/format/
   min-severity/gate/output inputs and propagates the gate exit code; the
@@ -199,6 +206,11 @@ Getting Caminus into others' hands.
   integration becomes a priority.
 
 ### Acceptance
-`goreleaser check` passes; a tagged release publishes archives + checksums (and
-brew/scoop once the secret is set); the Docker action scans a repo and fails the
-step on a high/critical finding (verified via the built image).
+- [x] `goreleaser check` passes (clean, no deprecations — 2026-06-03).
+- [x] Snapshot release builds archives + `checksums.txt` + cask + scoop manifest
+  (proven via `goreleaser release --snapshot --clean`, 2026-06-03).
+- [ ] Docker action scans a repo and fails the step on a high/critical finding
+  (verified via the built image) — **pending** (needs Docker daemon running).
+- [ ] A real tagged release publishes the archives/checksums to GitHub, and the
+  brew/scoop taps once `TAP_GITHUB_TOKEN` + the tap/bucket repos exist — **pending
+  external setup** (see `RELEASING.md`).
