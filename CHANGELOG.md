@@ -3,17 +3,11 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.6.0] — 2026-06-03
 
-### Added — inline env-routed injection (`CAM-INJ-002`)
-- Closes the last gap in the injection family: an attacker-controllable value
-  routed through an `env:` variable (the form `CAM-INJ-001` treats as safe) and
-  then used **unquoted** — or via `eval`/command-substitution — directly in a
-  `run:` shell of the same workflow. `CAM-INJ-001` matches only the literal
-  `${{ … }}` form and the indirect rules only referenced files, so this
-  same-step case fell between them. Reuses the trigger gate, untrusted-env
-  source collection, and shell-quote analyzer; confirmable; disjoint from
-  `CAM-INJ-001` (no double-reporting).
+Milestones **M3.5 and M4 complete**: indirect Poisoned Pipeline Execution
+detection, an opt-in structural-YAML engine, the inline env-routed injection
+rule, and distribution (packaging + a GitHub Action).
 
 ### Added — distribution (M4, packaging + GitHub Action)
 - **Homebrew + Scoop** via GoReleaser (`brews:` / `scoops:`), publishing to
@@ -28,11 +22,6 @@ All notable changes to Caminus are documented here. Format loosely follows
 - **GoReleaser hardening:** replaced the `go mod tidy` pre-hook with
   `go mod download` — `tidy` runs with default build tags and would prune the
   build-tag-only dependencies (`yaml.v3`, cloud SDKs) from `go.mod`.
-
-## [0.6.0] — 2026-06-02
-
-Milestone **M3.5 complete**: indirect Poisoned Pipeline Execution detection and
-an opt-in structural-YAML engine.
 
 ### Added — env-routed inline injection (`CAM-INJ-002`)
 - The same-step completion of the injection family: an attacker-controllable
