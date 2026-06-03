@@ -2,7 +2,10 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    # Semver release tags only (v1.2.3). The floating major tag `v0`/`v1` that
+    # Action consumers pin to is moved separately (see RELEASING.md) and must NOT
+    # trigger a GoReleaser run — it is not a semver version.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
 permissions:
   contents: write
