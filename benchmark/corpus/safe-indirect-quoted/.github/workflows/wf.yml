@@ -1,0 +1,9 @@
+name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: bash ./ci/build.sh

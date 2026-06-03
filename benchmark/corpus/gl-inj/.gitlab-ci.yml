@@ -1,0 +1,5 @@
+build:
+  script:
+    - echo "MR from $CI_MERGE_REQUEST_TITLE"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

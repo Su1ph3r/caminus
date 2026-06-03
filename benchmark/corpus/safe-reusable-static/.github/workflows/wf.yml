@@ -1,0 +1,7 @@
+name: ci
+on: [pull_request_target]
+jobs:
+  greet:
+    uses: ./.github/workflows/reusable.yml
+    with:
+      title: release-build

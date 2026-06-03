@@ -1,0 +1,9 @@
+name: outer
+inputs:
+  title: { required: true }
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/inner
+      with:
+        forwarded: ${{ inputs.title }}

@@ -1,0 +1,8 @@
+name: ci
+on: [pull_request_target]
+jobs:
+  greet:
+    uses: ./.github/workflows/reusable.yml
+    with:
+      title: ${{ github.event.pull_request.title }}
+    secrets: inherit

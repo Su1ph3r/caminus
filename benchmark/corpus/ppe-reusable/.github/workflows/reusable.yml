@@ -1,0 +1,9 @@
+on:
+  workflow_call:
+    inputs:
+      title: { type: string }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Thanks ${{ inputs.title }}"

@@ -1,0 +1,6 @@
+name: ci
+on: [push]
+jobs:
+  build:
+    uses: acme/ci/.github/workflows/build.yml@main
+    secrets: inherit

@@ -5,6 +5,21 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — M6: precision/recall benchmark
+- **`benchmark/` — a labeled corpus + reproducible scorer.** 21 self-contained
+  mini-repo cases (`gen_corpus.sh` regenerates them) with ground truth in
+  `manifest.jsonl`: 12 covered-vuln, 6 safe/near-miss, 3 known-gap. The scorer
+  (`benchmark_test.go`, run by `go test ./...`) builds the real binary, scans
+  each case, and scores **per rule class** (a privileged-trigger `CAM-PPE-001` on
+  a safe file is a true positive, not noise, so scoring is class-scoped via
+  `expect`/`forbid`). It fails the build on any false negative, any false positive
+  on a near-miss, or a `known_gap` that becomes detected. Baseline 2026-06-03:
+  precision 100%, recall 100% over covered classes, 0 FP on the 6 near-miss
+  cases. The 3 honest coverage gaps (github-script `script:` injection, nested
+  composite actions, local JS actions) are documented and tested as the frontier.
+  Now a CI regression gate. Cross-tool comparison vs poutine/raven/octoscan/
+  gato-x scaffolded in `COMPARISON.md` (numbers only for tools actually run).
+
 ### Added — M5 tail: callee env-routing + remote reusable-ref supply-chain
 - **Callee-side env-routing for `CAM-PPE-003` / `CAM-PPE-004`.** The reusable-
   workflow and composite-action injection rules now also catch the second hop: a
