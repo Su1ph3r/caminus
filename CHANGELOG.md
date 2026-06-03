@@ -5,6 +5,21 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — composite-action injection (M5, `CAM-PPE-004`)
+- **Cross-call-boundary expression injection through local composite actions.**
+  The step-level sibling of `CAM-PPE-003`: a workflow step on an attacker-
+  influenced trigger invokes a local composite action by directory
+  (`steps[].uses: ./.github/actions/foo`) and passes it an untrusted expression
+  via `with:`, where the action manifest (`foo/action.yml`, `runs.using:
+  composite`) interpolates `${{ inputs.<name> }}` into one of its own `run:`
+  steps. Uses dash-aware step-boundary parsing (a `keyColumn` normalization that
+  aligns `- name:` / `uses:` / `with:` regardless of which key carries the list
+  dash) so the matching `with:` is scoped to exactly the one step item — verified
+  against dash-on-uses, dash-on-name, and adjacent-sibling-step layouts. Tries
+  `action.yml` then `action.yaml`; `.yml` targets are routed to the reusable-
+  workflow rule; remote `owner/repo@ref` actions are out of scope. Same
+  absent→silent / unreadable→UNASSESSED discipline. Confirmable.
+
 ### Added — reusable-workflow injection (M5, `CAM-PPE-003`)
 - **Cross-call-boundary expression injection through local reusable workflows.**
   A caller on an attacker-influenced trigger that passes an untrusted expression

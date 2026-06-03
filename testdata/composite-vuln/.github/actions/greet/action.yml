@@ -1,0 +1,9 @@
+name: greet
+inputs:
+  title:
+    required: true
+runs:
+  using: composite
+  steps:
+    - run: echo "Hi ${{ inputs.title }}"
+      shell: bash

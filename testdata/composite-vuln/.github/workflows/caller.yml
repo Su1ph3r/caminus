@@ -1,0 +1,12 @@
+name: pr-greeter
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: greet the author
+        uses: ./.github/actions/greet
+        with:
+          title: ${{ github.event.pull_request.title }}

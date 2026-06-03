@@ -231,10 +231,15 @@ unreadable → UNASSESSED; symlink-confined read).
   forms; trigger-gated; remote `org/repo@ref` out of scope; absent → silent;
   unreadable → UNASSESSED. 8 unit tests + on-disk fixture
   (`testdata/reusable-vuln/`) scanned end-to-end via the CLI. Dogfood clean.
-- [ ] **Local composite-action injection** (`CAM-PPE-004`, proposed). `steps[].uses:
-  ./path` → `path/action.yml` with `runs.using: composite`; map caller `with:`
+- [x] **Local composite-action injection** (`CAM-PPE-004`). `steps[].uses: ./dir`
+  → `dir/action.yml`|`.yaml` with `runs.using: composite`; map the step's `with:`
   untrusted values to `inputs.<name>`; flag `${{ inputs.<name> }}` in the
-  composite's `run:` steps.
+  composite's `run:` steps. Dash-aware step-boundary parsing (keyColumn
+  normalization) so the matching `with:` is scoped to the one step item
+  regardless of which key carries the `- `; `.yml` targets routed to CAM-PPE-003,
+  remote `@ref` out of scope. 8 unit tests (dash-on-uses, dash-on-name, sibling-
+  step isolation, .yaml manifest, absent→silent) + on-disk fixture
+  (`testdata/composite-vuln/`) scanned E2E. Dogfood clean.
 - [ ] **Unpinned/mutable reusable or composite ref** (`CAM-SUP-002`, proposed).
   Remote `uses: org/repo/...@<mutable>` reusable workflow or action — cannot read
   contents → supply-chain finding (poisoning vector) + UNASSESSED note.
