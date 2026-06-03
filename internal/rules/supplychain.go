@@ -123,8 +123,13 @@ func (UnpinnedAction) Apply(doc *workflow.Doc) []model.Finding {
 			continue
 		}
 		repo, ref := m[1], m[2]
-		// Local (./...) and reusable-workflow refs handled elsewhere; skip
-		// digest-pinned refs, which are safe.
+		// A remote reusable-workflow ref (path ends in .yml/.yaml) is the concern
+		// of CAM-SUP-002, which scores it higher (it runs with the caller's
+		// secrets); local reusable workflows (./...) carry no @ref and are not
+		// matched here. Digest-pinned refs are safe.
+		if hasYAMLExt(repo) {
+			continue
+		}
 		if reSHA40.MatchString(ref) {
 			continue
 		}
@@ -149,4 +154,78 @@ func (UnpinnedAction) Apply(doc *workflow.Doc) []model.Finding {
 		})
 	}
 	return out
+}
+
+// reSecretsInherit matches a job passing all caller secrets to a called
+// reusable workflow (`secrets: inherit`).
+var reSecretsInherit = regexp.MustCompile(`^\s*secrets:\s*inherit\b`)
+
+// UnpinnedReusableWorkflow flags a REMOTE reusable workflow (jobs.<id>.uses:
+// owner/repo/.github/workflows/wf.yml@<ref>) pinned to a mutable ref instead of
+// a commit SHA (CICD-SEC-3). This is more dangerous than an unpinned step action
+// (CAM-SUP-001): a called reusable workflow runs as a whole job with the caller's
+// permissions, and is frequently invoked with `secrets: inherit` — so an upstream
+// owner (or an attacker who repoints the tag/branch) can poison your pipeline AND
+// exfiltrate the caller's secrets. Severity escalates to High when the job passes
+// `secrets: inherit` to the mutable-ref workflow. Caminus cannot read the remote
+// workflow's contents, so the dataflow rules (CAM-PPE-003) stay silent on it; this
+// surfaces the supply-chain exposure they cannot.
+type UnpinnedReusableWorkflow struct{}
+
+func (UnpinnedReusableWorkflow) ID() string { return "CAM-SUP-002" }
+
+func (UnpinnedReusableWorkflow) Apply(doc *workflow.Doc) []model.Finding {
+	var out []model.Finding
+	for i, line := range doc.Lines {
+		m := reUses.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		repo, ref := m[1], m[2]
+		if !hasYAMLExt(repo) || reSHA40.MatchString(ref) {
+			continue // not a remote reusable workflow, or already digest-pinned
+		}
+		sev := model.SevMedium
+		inherits := jobPassesSecretsInherit(doc.Lines, i, leadingSpaces(line))
+		desc := "The reusable workflow " + repo + " is called by the mutable ref \"" + ref + "\". A reusable " +
+			"workflow runs as a whole job with this caller's permissions; its owner — or an attacker who " +
+			"repoints that tag or branch — can change what runs in your pipeline at any time."
+		if inherits {
+			sev = model.SevHigh
+			desc += " This job passes `secrets: inherit`, so a poisoned upstream also receives ALL of the " +
+				"caller's secrets."
+		}
+		out = append(out, model.Finding{
+			RuleID:      "CAM-SUP-002",
+			Title:       "Reusable workflow not pinned to a commit SHA: " + repo + "@" + ref,
+			Severity:    sev,
+			Category:    model.CatSupplyChain,
+			File:        doc.Path,
+			Line:        i + 1,
+			Evidence:    trim(line),
+			Description: desc,
+			Remediation: "Pin the reusable workflow to a full 40-character commit SHA (" + repo + "@<sha>) and " +
+				"bump it via reviewed PRs. Prefer passing only the specific secrets the workflow needs over " +
+				"`secrets: inherit`.",
+			Confirmable: false,
+			References: []string{
+				"https://docs.github.com/actions/using-workflows/reusing-workflows#using-a-reusable-workflow",
+				"https://docs.github.com/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions",
+				"https://owasp.org/www-project-top-10-ci-cd-security-risks/ (CICD-SEC-3)",
+			},
+		})
+	}
+	return out
+}
+
+// jobPassesSecretsInherit reports whether the job whose `uses:` is at usesIdx
+// (indent usesIndent) also carries a `secrets: inherit` sibling.
+func jobPassesSecretsInherit(lines []string, usesIdx, usesIndent int) bool {
+	lo, hi := jobContentBounds(lines, usesIdx, usesIndent)
+	for i := lo; i <= hi; i++ {
+		if indentOfLine(lines[i]) == usesIndent && reSecretsInherit.MatchString(lines[i]) {
+			return true
+		}
+	}
+	return false
 }

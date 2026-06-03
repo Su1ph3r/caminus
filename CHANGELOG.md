@@ -5,6 +5,24 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — M5 tail: callee env-routing + remote reusable-ref supply-chain
+- **Callee-side env-routing for `CAM-PPE-003` / `CAM-PPE-004`.** The reusable-
+  workflow and composite-action injection rules now also catch the second hop: a
+  tainted input the called code routes through an `env:` variable
+  (`env: T: ${{ inputs.title }}`) and then uses unquoted / via `eval` /
+  command-substitution in a `run:` — not just the direct `${{ inputs.X }}`
+  interpolation. Quoted `"$T"` stays safe (recommended form). Reuses the
+  CAM-INJ-002 shell-quote analyzer; the run-segment grouping is factored out of
+  `InlineEnvInjection` and shared.
+- **`CAM-SUP-002` — unpinned/mutable remote reusable workflow.** A remote
+  `jobs.<id>.uses: owner/repo/.github/workflows/wf.yml@<mutable-ref>` runs as a
+  whole job with the caller's permissions and is often called with `secrets:
+  inherit`; an upstream owner (or tag/branch repointer) can poison the pipeline
+  and exfiltrate secrets. Medium for a mutable ref, **High** with `secrets:
+  inherit`. `CAM-SUP-001` now routes `.yml`/`.yaml` refs to this rule (no
+  double-report); step actions remain `CAM-SUP-001`. Caminus cannot read the
+  remote workflow, so this surfaces the exposure the dataflow rule can't.
+
 ### Added — composite-action injection (M5, `CAM-PPE-004`)
 - **Cross-call-boundary expression injection through local composite actions.**
   The step-level sibling of `CAM-PPE-003`: a workflow step on an attacker-

@@ -164,6 +164,55 @@ func TestReusable_AbsentCalleeIsSilent(t *testing.T) {
 	}
 }
 
+// calleeEnvRoutedUnquoted routes the input through an env: var, then uses it
+// unquoted in run: — the second-hop env-routed sink.
+const calleeEnvRoutedUnquoted = `on:
+  workflow_call:
+    inputs:
+      title: { type: string }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      T: ${{ inputs.title }}
+    steps:
+      - run: echo building $T
+`
+
+func TestReusable_EnvRoutedUnquotedInCallee(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml":       callerUntrustedWith,
+		".github/workflows/reusable.yml": calleeEnvRoutedUnquoted,
+	})
+	if ids := reusableFindings(t, root); !has(ids, "CAM-PPE-003/critical") {
+		t.Fatalf("env-routed tainted input used unquoted in callee run: should flag, got %v", ids)
+	}
+}
+
+// calleeEnvRoutedQuoted routes through env: and quotes the use — recommended-safe.
+const calleeEnvRoutedQuoted = `on:
+  workflow_call:
+    inputs:
+      title: { type: string }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      T: ${{ inputs.title }}
+    steps:
+      - run: echo building "$T"
+`
+
+func TestReusable_EnvRoutedQuotedIsSafe(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml":       callerUntrustedWith,
+		".github/workflows/reusable.yml": calleeEnvRoutedQuoted,
+	})
+	if ids := reusableFindings(t, root); has(ids, "CAM-PPE-003/critical") {
+		t.Fatalf("quoted \"$T\" in the callee is the recommended-safe form; should NOT flag, got %v", ids)
+	}
+}
+
 // callerFlowWith uses the inline flow-mapping with: form.
 const callerFlowWith = `name: ci
 on: [pull_request_target]

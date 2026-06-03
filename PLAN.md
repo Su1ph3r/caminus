@@ -240,14 +240,27 @@ unreadable → UNASSESSED; symlink-confined read).
   remote `@ref` out of scope. 8 unit tests (dash-on-uses, dash-on-name, sibling-
   step isolation, .yaml manifest, absent→silent) + on-disk fixture
   (`testdata/composite-vuln/`) scanned E2E. Dogfood clean.
-- [ ] **Unpinned/mutable reusable or composite ref** (`CAM-SUP-002`, proposed).
-  Remote `uses: org/repo/...@<mutable>` reusable workflow or action — cannot read
-  contents → supply-chain finding (poisoning vector) + UNASSESSED note.
-- [ ] **Callee-side env-routing** (follow-up). `env: X: ${{ inputs.title }}` then
-  `$X` used unquoted inside the called workflow/action — the second hop.
+- [x] **Unpinned/mutable remote reusable workflow** (`CAM-SUP-002`). Remote
+  `jobs.<id>.uses: owner/repo/.github/workflows/wf.yml@<mutable>` — contents
+  unreadable (CAM-PPE-003 stays silent), so this surfaces the supply-chain
+  exposure: Medium for a mutable ref, **High** when the job passes `secrets:
+  inherit` (poisoned upstream also gets all caller secrets). CAM-SUP-001 now
+  routes `.yml`/`.yaml` refs here (no double-report); step actions stay in
+  CAM-SUP-001. 5 unit tests incl. the no-double-report and pinned-is-safe cases.
+- [x] **Callee-side env-routing** (second hop). `env: X: ${{ inputs.<tainted> }}`
+  then `$X` used unquoted / eval / `$(…)` inside the called workflow or composite
+  manifest — extends CAM-PPE-003/004 beyond the direct `${{ inputs.X }}` sink,
+  reusing the CAM-INJ-002 quote analyzer. Quoted `"$X"` stays safe. Shared run-
+  segment grouping factored out of InlineEnvInjection (no regression).
 
-### Acceptance
+### Acceptance — met 2026-06-03
 `scan` flags a tainted input that reaches a `run:` across a reusable-workflow /
-composite-action boundary, stays silent on the safe-input and static-value forms,
-and never resolves a remote ref as a local file; `go test` / `-tags yaml` /
-`-tags cloud` green; dogfood self-scan still clean.
+composite-action boundary (direct AND env-routed), stays silent on the safe-
+input / static-value / quoted forms, never resolves a remote ref as a local
+file, and reports a remote mutable-ref reusable workflow as CAM-SUP-002 without
+double-reporting it as CAM-SUP-001; `go test` / `-tags yaml` / `-tags cloud` /
+`go vet` all green; dogfood self-scan still clean.
+
+**Remaining M5 (optional polish):** GitLab `include:` / `trigger:` child-pipeline
+dataflow parity; nested composite→composite hop. Deferred — the GitHub reuse
+surface (the headline blind spot) is covered.

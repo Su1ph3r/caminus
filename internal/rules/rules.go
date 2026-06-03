@@ -28,6 +28,7 @@ func Default() []Rule {
 		SelfHostedRunner{},
 		ExcessivePermissions{},
 		UnpinnedAction{},
+		UnpinnedReusableWorkflow{},
 	}
 }
 

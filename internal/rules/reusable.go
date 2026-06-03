@@ -102,11 +102,9 @@ func (ReusableWorkflowInjection) Apply(doc *workflow.Doc) []model.Finding {
 				Description: "The caller workflow runs on an attacker-influenced trigger and passes an untrusted " +
 					"expression to the local reusable workflow " + shortRel(root, site.File) + " through its " +
 					"`with:` input " + site.Input + " (invoked at " + doc.Path + ":" + fmt.Sprint(call.Line) + "). " +
-					"The called workflow then interpolates ${{ inputs." + site.Input + " }} directly into a run: " +
-					"shell. GitHub substitutes the expression into the script before the shell runs, so an " +
-					"attacker controls the value and injects commands on the runner with the workflow's token and " +
-					"secrets — expression injection across the reusable-workflow call boundary, which a scan of " +
-					"either file alone cannot see.",
+					calleeSinkClause(site) + " An attacker controls the value and injects commands on the runner " +
+					"with the workflow's token and secrets — expression injection across the reusable-workflow " +
+					"call boundary, which a scan of either file alone cannot see.",
 				Remediation: "Do not pass attacker-controllable expressions into a reusable workflow that " +
 					"interpolates an input into run:. In the called workflow, route the input through an " +
 					"intermediate env: variable and reference it quoted (\"$VAR\"); validate the value before " +
@@ -218,20 +216,34 @@ func jobContentBounds(lines []string, idx, indent int) (lo, hi int) {
 	return lo, hi
 }
 
-// calleeSite is an unsafe use of a tainted input in the called workflow.
+// calleeSite is an unsafe use of a tainted input in the called workflow. Env is
+// the intermediate environment variable when the input reached the shell by
+// env-routing (empty for a direct ${{ inputs.X }} interpolation).
 type calleeSite struct {
 	File  string
 	Line  int
 	Input string
+	Env   string
 	Code  string
 }
 
-// scanReusableCallee finds run-context lines in the called workflow that
-// interpolate a tainted input (${{ inputs.<name> }}). Mirrors CAM-INJ-001's
-// precision: an expression wrapper present on a run-context line, with the
-// reference naming a tainted input.
+// scanReusableCallee finds unsafe uses of a tainted input inside the called
+// workflow/action, in two forms:
+//
+//  1. Direct: ${{ inputs.<tainted> }} interpolated into a run: shell. GitHub
+//     substitutes the expression textually before the shell runs, so this is
+//     unsafe regardless of quoting (CAM-INJ-001 semantics, across the boundary).
+//  2. Env-routed: the callee assigns the input to an env: variable
+//     (env: T: ${{ inputs.<tainted> }}) and then uses $T unquoted / via eval /
+//     command substitution in a run:. Routing through env: is the recommended
+//     mitigation only if the value is then quoted; the unquoted use is the same
+//     injection one hop further in (CAM-PPE-002/CAM-INJ-002 semantics, applied to
+//     a reusable-workflow/composite-action input as the taint source).
 func scanReusableCallee(callee *workflow.Doc, tainted map[string]bool) []calleeSite {
 	var out []calleeSite
+	seen := map[int]bool{}
+
+	// (1) Direct interpolation of a tainted input into a run:.
 	for i, line := range callee.Lines {
 		if !reExprWrap.MatchString(line) || !callee.InRunContext(i) {
 			continue
@@ -239,11 +251,101 @@ func scanReusableCallee(callee *workflow.Doc, tainted map[string]bool) []calleeS
 		for _, m := range reInputsRef.FindAllStringSubmatch(line, -1) {
 			if tainted[m[1]] {
 				out = append(out, calleeSite{File: callee.Path, Line: i + 1, Input: m[1], Code: trim(line)})
+				seen[i+1] = true
 				break // one finding per line is enough
 			}
 		}
 	}
+
+	// (2) Env-routed: env vars carrying a tainted input, then used unsafely.
+	routed := calleeInputRoutedEnv(callee, tainted)
+	if len(routed) > 0 {
+		names := map[string]bool{}
+		for env := range routed {
+			names[env] = true
+		}
+		for _, seg := range runSegments(callee) {
+			for _, s := range scanShellSites(callee.Path, seg, names, false) {
+				if seen[s.Line] {
+					continue
+				}
+				seen[s.Line] = true
+				out = append(out, calleeSite{File: callee.Path, Line: s.Line, Input: routed[s.Name], Env: s.Name, Code: s.Code})
+			}
+		}
+	}
 	return out
+}
+
+// calleeInputRoutedEnv returns the env vars in the callee whose value
+// interpolates a tainted input (env: T: ${{ inputs.<tainted> }}), mapping the
+// env-var name to the input name it carries. It walks both the block and
+// single-line flow env: forms, mirroring collectUntrustedEnvLineModel but with a
+// tainted-input value predicate instead of valueIsUntrusted.
+func calleeInputRoutedEnv(callee *workflow.Doc, tainted map[string]bool) map[string]string {
+	out := map[string]string{}
+	record := func(name, value string) {
+		if in, ok := taintedInputIn(value, tainted); ok {
+			out[name] = in
+		}
+	}
+	lines := callee.Lines
+	for i := 0; i < len(lines); i++ {
+		if fm := reEnvFlow.FindStringSubmatch(lines[i]); fm != nil {
+			for _, entry := range strings.Split(fm[1], ",") {
+				if em := reMapEntry.FindStringSubmatch(entry); em != nil {
+					record(em[1], em[2])
+				}
+			}
+			continue
+		}
+		m := reEnvKey.FindStringSubmatch(lines[i])
+		if m == nil {
+			continue
+		}
+		envIndent := len(m[1])
+		for j := i + 1; j < len(lines); j++ {
+			t := strings.TrimSpace(lines[j])
+			if t == "" || strings.HasPrefix(t, "#") {
+				continue
+			}
+			if indentOfLine(lines[j]) <= envIndent {
+				break
+			}
+			if em := reMapEntry.FindStringSubmatch(lines[j]); em != nil {
+				record(em[1], em[2])
+			}
+		}
+	}
+	return out
+}
+
+// taintedInputIn reports whether a YAML scalar interpolates ${{ inputs.<name> }}
+// for a tainted input name, and returns that input name.
+func taintedInputIn(v string, tainted map[string]bool) (string, bool) {
+	if !reExprWrap.MatchString(v) {
+		return "", false
+	}
+	for _, m := range reInputsRef.FindAllStringSubmatch(v, -1) {
+		if tainted[m[1]] {
+			return m[1], true
+		}
+	}
+	return "", false
+}
+
+// calleeSinkClause describes how the tainted input reaches the shell in the
+// called workflow/action — direct interpolation, or env-routed then used
+// unsafely — for the finding description. Both callers (CAM-PPE-003/004) share
+// it so the two sink forms read consistently.
+func calleeSinkClause(site calleeSite) string {
+	if site.Env != "" {
+		return "The called code routes that input into the environment variable " + site.Env +
+			" and then uses $" + site.Env + " unquoted (or via eval/command substitution) in a run: shell; " +
+			"routing through env: only helps if the value is then quoted."
+	}
+	return "The called code then interpolates ${{ inputs." + site.Input + " }} directly into a run: shell. " +
+		"GitHub substitutes the expression into the script before the shell runs, so quoting does not help."
 }
 
 // reusableUnassessed reports that a called reusable workflow was present but

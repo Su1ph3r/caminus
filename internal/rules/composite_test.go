@@ -133,6 +133,31 @@ func TestComposite_YamlManifestExtension(t *testing.T) {
 	}
 }
 
+// compositeManifestEnvRouted routes the input through env: on the run step and
+// uses it unquoted — composite env-routed second-hop sink.
+const compositeManifestEnvRouted = `name: greet
+inputs:
+  title:
+    required: true
+runs:
+  using: composite
+  steps:
+    - run: echo hi $T
+      shell: bash
+      env:
+        T: ${{ inputs.title }}
+`
+
+func TestComposite_EnvRoutedUnquotedInManifest(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml":         callerStepUsesComposite,
+		".github/actions/greet/action.yml": compositeManifestEnvRouted,
+	})
+	if ids := compositeFindings(t, root); !has(ids, "CAM-PPE-004/critical") {
+		t.Fatalf("env-routed tainted input used unquoted in composite run: should flag, got %v", ids)
+	}
+}
+
 func TestComposite_AbsentManifestSilent(t *testing.T) {
 	root := writeRepo(t, map[string]string{
 		".github/workflows/wf.yml": callerStepUsesComposite,

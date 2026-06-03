@@ -81,11 +81,10 @@ func (CompositeActionInjection) Apply(doc *workflow.Doc) []model.Finding {
 				Evidence: site.Code,
 				Description: "The caller workflow runs on an attacker-influenced trigger and passes an untrusted " +
 					"expression to the local composite action " + dir + " through its `with:` input " + site.Input +
-					" (invoked at " + doc.Path + ":" + fmt.Sprint(i+1) + "). The action manifest then interpolates " +
-					"${{ inputs." + site.Input + " }} directly into a run: step. GitHub substitutes the expression " +
-					"into the script before the shell runs, so an attacker controls the value and injects commands " +
-					"on the runner with the workflow's token and secrets — expression injection across the " +
-					"composite-action call boundary, which a scan of either file alone cannot see.",
+					" (invoked at " + doc.Path + ":" + fmt.Sprint(i+1) + "). " + calleeSinkClause(site) +
+					" An attacker controls the value and injects commands on the runner with the workflow's token " +
+					"and secrets — expression injection across the composite-action call boundary, which a scan of " +
+					"either file alone cannot see.",
 				Remediation: "Do not pass attacker-controllable expressions into a composite action that " +
 					"interpolates an input into run:. In the action, route the input through an intermediate " +
 					"env: variable and reference it quoted (\"$VAR\"); validate it before use. Treat any composite " +

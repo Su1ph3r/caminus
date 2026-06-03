@@ -122,14 +122,30 @@ func (InlineEnvInjection) Apply(doc *workflow.Doc) []model.Finding {
 		}
 		seg = nil
 	}
-	// Group consecutive run-context lines into segments so heredoc/continuation
-	// handling stays within a single run: block. A blank or comment-only line
-	// inside a `run: |` block scalar reports InRunContext == false (it dedents to
-	// column 0), but it is still part of the script — flushing on it would split
-	// the segment mid-heredoc and rescan body data as commands (a false positive).
-	// So such lines stay in an open segment; scanShellSites skips them internally.
-	// They never merge two distinct run: blocks, because the intervening step keys
-	// (`- run:`, `- name:`, …) are non-blank non-run lines that do flush.
+	for _, s := range runSegments(doc) {
+		seg = s
+		flush()
+	}
+	return out
+}
+
+// runSegments groups a workflow's run-context lines into per-`run:`-block
+// segments suitable for scanShellSites. A blank or comment-only line inside a
+// `run: |` block scalar reports InRunContext == false (it dedents to column 0),
+// but it is still part of the script — splitting the segment on it would rescan
+// body data as commands (a false positive). So such lines stay in an open
+// segment (scanShellSites skips them internally); they never merge two distinct
+// run: blocks, because the intervening step keys (`- run:`, `- name:`, …) are
+// non-blank non-run lines that close the segment.
+func runSegments(doc *workflow.Doc) [][]physLine {
+	var segs [][]physLine
+	var seg []physLine
+	flush := func() {
+		if len(seg) > 0 {
+			segs = append(segs, seg)
+			seg = nil
+		}
+	}
 	for i := range doc.Lines {
 		switch {
 		case doc.InRunContext(i):
@@ -141,7 +157,7 @@ func (InlineEnvInjection) Apply(doc *workflow.Doc) []model.Finding {
 		}
 	}
 	flush()
-	return out
+	return segs
 }
 
 // shortRel renders a referenced-file path relative to the repo root for readable
