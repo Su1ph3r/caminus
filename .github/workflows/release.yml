@@ -23,3 +23,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT with write access to Su1ph3r/homebrew-tap and Su1ph3r/scoop-bucket.
+          # Until it (and those repos) exist, SKIP_PKG_PUBLISH is "true" and the
+          # Homebrew/Scoop publish steps are skipped — binary archives still ship.
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          SKIP_PKG_PUBLISH: ${{ secrets.TAP_GITHUB_TOKEN == '' }}

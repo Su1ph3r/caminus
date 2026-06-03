@@ -183,6 +183,22 @@ the quoted-safe form); default build links **0** YAML packages, `-tags yaml`
 links yaml.v3; `go test` / `-tags yaml` / `-tags cloud` all green; dogfood
 self-scan still clean.
 
-## Later milestones
-- **M4 / pipeline:** Vinculum + Ariadne export; GoReleaser/Homebrew/Scoop, a
-  GitHub Action wrapper.
+## M4 → distribution (in progress)
+
+Getting Caminus into others' hands.
+- [x] **Packaging** — GoReleaser publishes Homebrew (`Su1ph3r/homebrew-tap`) and
+  Scoop (`Su1ph3r/scoop-bucket`) alongside the cross-platform archives, gated by
+  `SKIP_PKG_PUBLISH` so releases work before the tap/bucket + `TAP_GITHUB_TOKEN`
+  exist (`RELEASING.md`). Pre-hook changed `go mod tidy` → `go mod download` so
+  the build-tag-only deps are not pruned.
+- [x] **GitHub Action** — Docker action (`action.yml` + `Dockerfile` +
+  `entrypoint.sh`) runs `caminus scan` in CI with path/platform/format/
+  min-severity/gate/output inputs and propagates the gate exit code; the
+  Dockerfile is also a general-purpose Caminus image.
+- **Dropped (indefinitely):** Vinculum + Ariadne export. Re-open if the toolsuite
+  integration becomes a priority.
+
+### Acceptance
+`goreleaser check` passes; a tagged release publishes archives + checksums (and
+brew/scoop once the secret is set); the Docker action scans a repo and fails the
+step on a high/critical finding (verified via the built image).

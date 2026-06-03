@@ -3,10 +3,47 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added — inline env-routed injection (`CAM-INJ-002`)
+- Closes the last gap in the injection family: an attacker-controllable value
+  routed through an `env:` variable (the form `CAM-INJ-001` treats as safe) and
+  then used **unquoted** — or via `eval`/command-substitution — directly in a
+  `run:` shell of the same workflow. `CAM-INJ-001` matches only the literal
+  `${{ … }}` form and the indirect rules only referenced files, so this
+  same-step case fell between them. Reuses the trigger gate, untrusted-env
+  source collection, and shell-quote analyzer; confirmable; disjoint from
+  `CAM-INJ-001` (no double-reporting).
+
+### Added — distribution (M4, packaging + GitHub Action)
+- **Homebrew + Scoop** via GoReleaser (`brews:` / `scoops:`), publishing to
+  `Su1ph3r/homebrew-tap` and `Su1ph3r/scoop-bucket`. Gated by `SKIP_PKG_PUBLISH`
+  so binary releases succeed before the tap/bucket and `TAP_GITHUB_TOKEN` secret
+  are set up (see `RELEASING.md`).
+- **GitHub Action** (`action.yml` + `Dockerfile` + `entrypoint.sh`): a Docker
+  action that runs `caminus scan` in CI with inputs for path/platform/format/
+  min-severity/gate/output, builds the image from source at the pinned ref, and
+  propagates the gate exit code. The `Dockerfile` doubles as a general-purpose
+  Caminus container image.
+- **GoReleaser hardening:** replaced the `go mod tidy` pre-hook with
+  `go mod download` — `tidy` runs with default build tags and would prune the
+  build-tag-only dependencies (`yaml.v3`, cloud SDKs) from `go.mod`.
+
 ## [0.6.0] — 2026-06-02
 
 Milestone **M3.5 complete**: indirect Poisoned Pipeline Execution detection and
 an opt-in structural-YAML engine.
+
+### Added — env-routed inline injection (`CAM-INJ-002`)
+- The same-step completion of the injection family: an attacker-controllable
+  value routed through an `env:` variable (the form `CAM-INJ-001` treats as safe)
+  but then used **unquoted** — or via `eval`/command-substitution — directly in a
+  `run:` shell. `CAM-INJ-001` fires only on the literal `${{ github.event.* }}`
+  form and the indirect rules only on referenced files, so this env-routed-but-
+  unquoted inline case previously fell between them. Reuses the trigger gate,
+  untrusted-env source collection, and shell-quote analyzer (so `"$VAR"` stays
+  safe); confirmable, mapped to the injection PoC generator. The two injection
+  rules are disjoint — `CAM-INJ-002` never double-reports the literal form.
 
 ### Added — indirect-PPE detection (default build, zero new deps)
 - `CAM-PPE-002` (GitHub Actions) and `CAM-GL-INJ-002` (GitLab CI): an attacker-

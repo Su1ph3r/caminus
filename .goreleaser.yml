@@ -3,7 +3,10 @@ project_name: caminus
 
 before:
   hooks:
-    - go mod tidy
+    # NOT `go mod tidy`: tidy runs with default build tags and would prune the
+    # build-tag-only dependencies (gopkg.in/yaml.v3 for `-tags yaml`, the cloud
+    # SDKs for `-tags cloud`) from go.mod. `download` fetches without mutating.
+    - go mod download
 
 builds:
   - main: ./cmd/caminus
@@ -15,6 +18,8 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}}
 
+# Prebuilt binaries are the dependency-free core build (no `-tags cloud|yaml`);
+# cloud enumeration and the structural-YAML engine are opt-in source builds.
 archives:
   - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
@@ -33,3 +38,42 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^chore:'
+
+# Homebrew tap. Requires a `Su1ph3r/homebrew-tap` repo and a PAT with write
+# access to it in the TAP_GITHUB_TOKEN secret. SKIP_PKG_PUBLISH (set by the
+# release workflow when that secret is absent) lets binary releases succeed
+# before the tap is set up.
+brews:
+  - name: caminus
+    repository:
+      owner: Su1ph3r
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/Su1ph3r/caminus"
+    description: "Multi-platform CI/CD pipeline attack-surface scanner and attack-path synthesizer"
+    license: "MIT"
+    skip_upload: "{{ .Env.SKIP_PKG_PUBLISH }}"
+    commit_author:
+      name: release-bot
+      email: release-bot@users.noreply.github.com
+    install: |
+      bin.install "caminus"
+    test: |
+      system "#{bin}/caminus", "version"
+
+# Scoop bucket (Windows). Requires a `Su1ph3r/scoop-bucket` repo and the same
+# TAP_GITHUB_TOKEN. Gated identically by SKIP_PKG_PUBLISH.
+scoops:
+  - name: caminus
+    repository:
+      owner: Su1ph3r
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/Su1ph3r/caminus"
+    description: "Multi-platform CI/CD pipeline attack-surface scanner and attack-path synthesizer"
+    license: "MIT"
+    skip_upload: "{{ .Env.SKIP_PKG_PUBLISH }}"
+    commit_author:
+      name: release-bot
+      email: release-bot@users.noreply.github.com

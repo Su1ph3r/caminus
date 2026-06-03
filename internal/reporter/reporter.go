@@ -1,9 +1,10 @@
 // Package reporter renders findings for humans and for downstream tools.
 //
-// Pipeline integration is a first-class Caminus goal: the JSON shape here is the
-// seam by which Caminus findings flow into Vinculum (correlation) and onward to
-// Ariadne (attack-path synthesis) and Nubicustos (cloud blast-radius), making
-// Caminus the missing CI/CD node in that toolchain.
+// Pipeline integration is a first-class Caminus goal: the JSON shape here is a
+// clean, Vinculum-shaped tool-output document so Caminus findings are ingestible
+// by Vinculum (correlation) and, downstream, Ariadne (attack-path synthesis) and
+// Nubicustos (cloud blast-radius). A dedicated Vinculum/Ariadne exporter is not
+// built; the JSON and SARIF reports are the integration seam.
 package reporter
 
 import (

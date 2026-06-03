@@ -35,14 +35,62 @@ Execution (PPE) classes.
 
 ## Install
 
+Prebuilt binaries (Linux/macOS/Windows, amd64/arm64) are attached to each
+[release](https://github.com/Su1ph3r/caminus/releases). They are the
+dependency-free core build; the cloud and structural-YAML engines are opt-in
+source builds (see below).
+
 ```bash
-go build -o caminus ./cmd/caminus
-# or
+# Homebrew (macOS / Linux)
+brew install Su1ph3r/tap/caminus
+
+# Scoop (Windows)
+scoop bucket add su1ph3r https://github.com/Su1ph3r/scoop-bucket
+scoop install caminus
+
+# Docker (build the image, then scan a mounted repo)
+docker build -t caminus .
+docker run --rm -v "$PWD:/repo" -w /repo caminus scan .
+
+# From source
 go install github.com/Su1ph3r/caminus/cmd/caminus@latest
 
 # With cloud blast-radius support (AWS / GCP / Azure SDKs):
 go build -tags cloud -o caminus ./cmd/caminus
+# With the structural-YAML detection engine (anchor/alias/flow resolution):
+go build -tags yaml -o caminus ./cmd/caminus
 ```
+
+### Use in CI (GitHub Action)
+
+```yaml
+# .github/workflows/caminus.yml
+name: caminus
+on: [push, pull_request]
+permissions:
+  contents: read
+  security-events: write   # only needed to upload SARIF
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Su1ph3r/caminus@v0   # pin to a release tag/SHA in practice
+        with:
+          path: .
+          format: sarif
+          output: caminus.sarif
+          gate: high               # fail the job on a high/critical finding
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: caminus.sarif
+```
+
+Action inputs: `path`, `platform` (`auto|github|gitlab`), `format`
+(`text|json|sarif`), `min-severity`, `gate` (`critical|high|medium|low|none`),
+`fail-on-incomplete`, `output` (write the report to a file), and `args` (raw
+escape hatch).
 
 ## Usage
 
@@ -144,6 +192,7 @@ against a target you own.
 | ID | Severity | What it catches |
 |----|----------|-----------------|
 | `CAM-INJ-001`  | Critical | Untrusted `${{ github.event.* }}` interpolated into a `run:` shell |
+| `CAM-INJ-002`  | Critical | Env-routed untrusted input used **unquoted** (or via `eval`/command-substitution) in a `run:` shell |
 | `CAM-PPE-002`  | Critical | Indirect PPE: untrusted input reaches a shell **inside a local file the pipeline runs** (script/Makefile/`package.json`), unquoted or via `eval` |
 | `CAM-PPE-001`  | Crit/High/Med | Pwn request: privileged trigger (± untrusted checkout) |
 | `CAM-RUN-001`  | High/Med | Self-hosted runner reachable by pipeline execution |
@@ -169,12 +218,13 @@ against a target you own.
 | `CAM-OIDC-002` | High/Crit | Attacker-controllable pipeline can assume a permissively-trusted cloud role (CI → OIDC → cloud) |
 
 Caminus deliberately does **not** flag untrusted input routed through an
-intermediate `env:` variable (GitHub) or a quoted environment read (GitLab) —
-that is the recommended remediation, and false-positiving on best practice
-erodes trust. The indirect rules (`CAM-PPE-002` / `CAM-GL-INJ-002`) close the
-flip side: routing is only safe if the value is then *used* safely, so when the
-pipeline hands execution to a local repo file that uses the value **unquoted**
-or via `eval`/command-substitution, that is flagged. The referenced file is read
+intermediate `env:` variable and then **quoted** (`"$VAR"`) — that is the
+recommended remediation, and false-positiving on best practice erodes trust. It
+*does* flag the cases where routing was not actually made safe: `CAM-INJ-002`
+when the env-routed value is used **unquoted** (or via `eval`/command-
+substitution) directly in a `run:` shell, and the indirect rules
+(`CAM-PPE-002` / `CAM-GL-INJ-002`) when the same unsafe use happens one file-hop
+out, inside a local repo file the pipeline executes. The referenced file is read
 from disk relative to the repo root; if it is not present (e.g. a single-file
 scan) nothing is reported — no speculative findings.
 
@@ -198,7 +248,7 @@ go build -tags yaml -o caminus ./cmd/caminus
 ```
 
 See [`DESIGN.md`](./DESIGN.md) for architecture, the attack taxonomy, and the
-M1.5 → M4 roadmap (GitLab CI, SARIF/Ariadne export, authenticated enumeration,
+M1.5 → M4 roadmap (GitLab CI, SARIF, authenticated enumeration,
 OIDC graph, dynamic confirmation).
 
 ## License

@@ -77,6 +77,73 @@ func (IndirectPPE) Apply(doc *workflow.Doc) []model.Finding {
 	return out
 }
 
+// InlineEnvInjection detects an attacker-controllable value that is routed
+// through an env: variable (the form CAM-INJ-001 deliberately treats as safe)
+// and then used UNSAFELY — unquoted, or via eval/command-substitution —
+// directly in a run: shell of the same workflow. CAM-INJ-001 fires only on the
+// literal ${{ github.event.* }} form, so the env-routed-but-unquoted case fell
+// between it and the indirect (referenced-file) rule. This is the same-step
+// dataflow completion of the injection family; no file is read.
+type InlineEnvInjection struct{}
+
+func (InlineEnvInjection) ID() string { return "CAM-INJ-002" }
+
+func (InlineEnvInjection) Apply(doc *workflow.Doc) []model.Finding {
+	names, triggers := githubIndirectSources(doc)
+	if !anyTrigger(triggers, indirectTriggers) || len(names) == 0 {
+		return nil
+	}
+
+	var out []model.Finding
+	var seg []physLine
+	flush := func() {
+		for _, site := range scanShellSites(doc.Path, seg, names, false) {
+			out = append(out, model.Finding{
+				RuleID:   "CAM-INJ-002",
+				Title:    fmt.Sprintf("Env-routed untrusted input %q used unsafely in a run: shell", site.Name),
+				Severity: model.SevCritical,
+				Category: model.CatInjection,
+				File:     doc.Path,
+				Line:     site.Line,
+				Evidence: site.Code,
+				Description: "The workflow runs on an attacker-influenced trigger and routes untrusted input " +
+					"into the environment variable " + site.Name + ". Routing through env: is the recommended " +
+					"mitigation, but only if the value is then quoted: here it is used unquoted (or via " +
+					"eval/command-substitution) in a run: shell, so an attacker controls the value and injects " +
+					"shell commands on the runner with the workflow's token and secrets.",
+				Remediation: "Quote the variable in the run: step (\"$" + site.Name + "\"); never use it " +
+					"unquoted or pass it to eval/an unquoted command substitution.",
+				Confirmable: true,
+				References: []string{
+					"https://securitylab.github.com/resources/github-actions-untrusted-input/",
+					"https://owasp.org/www-project-top-10-ci-cd-security-risks/ (CICD-SEC-4)",
+				},
+			})
+		}
+		seg = nil
+	}
+	// Group consecutive run-context lines into segments so heredoc/continuation
+	// handling stays within a single run: block. A blank or comment-only line
+	// inside a `run: |` block scalar reports InRunContext == false (it dedents to
+	// column 0), but it is still part of the script — flushing on it would split
+	// the segment mid-heredoc and rescan body data as commands (a false positive).
+	// So such lines stay in an open segment; scanShellSites skips them internally.
+	// They never merge two distinct run: blocks, because the intervening step keys
+	// (`- run:`, `- name:`, …) are non-blank non-run lines that do flush.
+	for i := range doc.Lines {
+		switch {
+		case doc.InRunContext(i):
+			seg = append(seg, physLine{idx: i, text: doc.Lines[i]})
+		case len(seg) > 0 && isBlankOrComment(doc.Lines[i]):
+			seg = append(seg, physLine{idx: i, text: doc.Lines[i]})
+		default:
+			flush()
+		}
+	}
+	flush()
+	return out
+}
+
 // shortRel renders a referenced-file path relative to the repo root for readable
 // titles, falling back to the full path.
 func shortRel(root, full string) string {
@@ -208,6 +275,11 @@ func valueIsUntrusted(v string) bool {
 		}
 	}
 	return false
+}
+
+func isBlankOrComment(s string) bool {
+	t := strings.TrimSpace(s)
+	return t == "" || strings.HasPrefix(t, "#")
 }
 
 func indentOfLine(s string) int {

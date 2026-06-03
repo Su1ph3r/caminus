@@ -476,10 +476,23 @@ func indexLines(lines []string) []physLine {
 // reHeredoc matches a heredoc opener and captures the delimiter word.
 var reHeredoc = regexp.MustCompile(`<<-?\s*["']?([A-Za-z_][A-Za-z0-9_]*)["']?`)
 
-// scanShellLines runs the quote analyzer over a slice of physical lines, folding
-// backslash continuations into one logical line and skipping heredoc bodies. A
-// hit is reported at the starting physical line. makeMode expects `$$VAR`.
+// scanShellLines runs the quote analyzer over a slice of physical lines and
+// returns the first unsafe use, or nil. See scanShellSites for the shared logic.
 func scanShellLines(file string, lines []physLine, names map[string]bool, makeMode bool) *unsafeSite {
+	if sites := scanShellSites(file, lines, names, makeMode); len(sites) > 0 {
+		return sites[0]
+	}
+	return nil
+}
+
+// scanShellSites runs the quote analyzer over a slice of physical lines, folding
+// backslash continuations into one logical line and skipping heredoc bodies, and
+// returns every unsafe use (one per offending logical line). Hits are reported
+// at the starting physical line. makeMode expects `$$VAR`. The single-hit
+// scanShellLines is used for referenced files (first finding is enough); the
+// all-hits form is used for inline run: blocks (report each unsafe line).
+func scanShellSites(file string, lines []physLine, names map[string]bool, makeMode bool) []*unsafeSite {
+	var out []*unsafeSite
 	for i := 0; i < len(lines); i++ {
 		startIdx := lines[i].idx   // physical (file) line number for evidence
 		startText := lines[i].text // first physical line of this logical line
@@ -507,10 +520,10 @@ func scanShellLines(file string, lines []physLine, names map[string]bool, makeMo
 			}
 		}
 		if name, ok := shellUnsafeUse(logical, names, makeMode); ok {
-			return &unsafeSite{File: file, Line: startIdx + 1, Name: name, Code: trim(startText)}
+			out = append(out, &unsafeSite{File: file, Line: startIdx + 1, Name: name, Code: trim(startText)})
 		}
 	}
-	return nil
+	return out
 }
 
 // endsWithContinuation reports a trailing odd-count backslash (a real line

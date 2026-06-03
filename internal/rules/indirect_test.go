@@ -263,6 +263,165 @@ func TestShellUnsafeUse(t *testing.T) {
 	}
 }
 
+// --- CAM-INJ-002: inline env-routed unsafe use -----------------------------
+
+func inlineFindings(t *testing.T, wf string) []model.Finding {
+	t.Helper()
+	doc := workflow.Parse(".github/workflows/wf.yml", []byte(wf))
+	return (InlineEnvInjection{}).Apply(doc)
+}
+
+func hasRule(fs []model.Finding, id string) bool {
+	for _, f := range fs {
+		if f.RuleID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func TestInlineEnvInjection_UnquotedFlagged(t *testing.T) {
+	wf := `name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: echo building $TITLE
+`
+	if fs := inlineFindings(t, wf); !hasRule(fs, "CAM-INJ-002") {
+		t.Fatalf("expected CAM-INJ-002 for unquoted env-routed $TITLE in run:, got %+v", fs)
+	}
+}
+
+func TestInlineEnvInjection_QuotedSafe(t *testing.T) {
+	wf := `name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: echo building "$TITLE"
+`
+	if fs := inlineFindings(t, wf); hasRule(fs, "CAM-INJ-002") {
+		t.Fatalf("quoted \"$TITLE\" in run: is the recommended-safe form; should NOT flag, got %+v", fs)
+	}
+}
+
+func TestInlineEnvInjection_BlockScalarMultiLine(t *testing.T) {
+	wf := `name: ci
+on: [issue_comment]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BODY: ${{ github.event.comment.body }}
+    steps:
+      - run: |
+          echo "$BODY"
+          tag=$BODY
+`
+	// line 1 is safe (quoted); line 2 (tag=$BODY) is unquoted → exactly one finding.
+	fs := inlineFindings(t, wf)
+	if !hasRule(fs, "CAM-INJ-002") {
+		t.Fatalf("expected CAM-INJ-002 on the unquoted block-scalar line, got %+v", fs)
+	}
+	n := 0
+	for _, f := range fs {
+		if f.RuleID == "CAM-INJ-002" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("expected exactly one CAM-INJ-002 (only the unquoted line), got %d: %+v", n, fs)
+	}
+}
+
+func TestInlineEnvInjection_HeredocWithBlankLineNotFlagged(t *testing.T) {
+	// A blank line inside a `run: |` heredoc body dedents to column 0
+	// (InRunContext == false). The segment must NOT be split there, or the
+	// post-blank heredoc data ($TITLE) gets rescanned as a command (false
+	// positive). The heredoc body is data, not a command position.
+	wf := `name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: |
+          cat <<EOF > notes.txt
+          first line
+
+          tag $TITLE
+          EOF
+          echo done
+`
+	if fs := inlineFindings(t, wf); hasRule(fs, "CAM-INJ-002") {
+		t.Fatalf("heredoc body (incl. across a blank line) is data; should NOT flag, got %+v", fs)
+	}
+}
+
+func TestInlineEnvInjection_UnsafeAfterBlankLineStillFlagged(t *testing.T) {
+	// The blank-line segment merge must not cause real unsafe uses to be missed:
+	// an unquoted use on a normal command line after a blank is still flagged.
+	wf := `name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: |
+          echo start
+
+          tag=$TITLE
+`
+	if fs := inlineFindings(t, wf); !hasRule(fs, "CAM-INJ-002") {
+		t.Fatalf("unquoted $TITLE after a blank line is a real command-position use; expected CAM-INJ-002, got %+v", fs)
+	}
+}
+
+func TestInlineEnvInjection_NoTriggerNoFinding(t *testing.T) {
+	wf := `name: ci
+on:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: echo $TITLE
+`
+	if fs := inlineFindings(t, wf); hasRule(fs, "CAM-INJ-002") {
+		t.Fatalf("push-only workflow delivers no attacker input; should NOT flag, got %+v", fs)
+	}
+}
+
+func TestInlineEnvInjection_LiteralExprNotDoubleReported(t *testing.T) {
+	// The literal ${{ github.event.* }} form is CAM-INJ-001's job; CAM-INJ-002
+	// must not also fire on it (the two rules are disjoint).
+	wf := `name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ${{ github.event.pull_request.title }}
+`
+	if fs := inlineFindings(t, wf); hasRule(fs, "CAM-INJ-002") {
+		t.Fatalf("CAM-INJ-002 should not fire on the literal ${{ }} form (that is CAM-INJ-001), got %+v", fs)
+	}
+}
+
 // --- finalize-hardening regression tests ----------------------------------
 
 func ghFinding(t *testing.T, root string) []model.Finding {

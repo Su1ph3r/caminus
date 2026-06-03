@@ -1,0 +1,10 @@
+.git
+.github
+dist
+bin
+*.exe
+caminus
+caminus-cloud
+*_test.go
+testdata
+*.md

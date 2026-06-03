@@ -1,0 +1,45 @@
+name: 'Caminus CI/CD Scan'
+description: 'Scan GitHub Actions / GitLab CI pipelines for attack-surface findings (injection, pwn-request, runner exposure, OIDC, unpinned actions).'
+author: 'Su1ph3r'
+branding:
+  icon: 'shield'
+  color: 'orange'
+
+inputs:
+  path:
+    description: 'File or directory to scan.'
+    required: false
+    default: '.'
+  platform:
+    description: 'Pipeline platform: auto | github | gitlab.'
+    required: false
+    default: 'auto'
+  format:
+    description: 'Output format: text | json | sarif.'
+    required: false
+    default: 'text'
+  min-severity:
+    description: 'Report findings at or above: critical | high | medium | low | info.'
+    required: false
+    default: 'info'
+  gate:
+    description: 'Fail the step if a finding at or above this severity is reported (critical | high | medium | low | none).'
+    required: false
+    default: 'high'
+  fail-on-incomplete:
+    description: 'Fail if any targeted file could not be analyzed (UNASSESSED).'
+    required: false
+    default: 'false'
+  output:
+    description: 'Write the report to this file (e.g. results.sarif) instead of stdout. Pair format: sarif with github/codeql-action/upload-sarif.'
+    required: false
+    default: ''
+  args:
+    description: 'Extra raw arguments appended to `caminus scan` (escape hatch).'
+    required: false
+    default: ''
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  entrypoint: '/entrypoint.sh'

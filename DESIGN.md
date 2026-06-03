@@ -45,9 +45,11 @@ primitive into a **confirmed** one. That is Caminus.
    `exploit` stage proves them against a target you own (malicious-PR diff /
    workflow payload with a benign canary) — aligned with the project's
    runtime-PoC discipline.
-4. **Pipeline-native output.** Findings export to **Vinculum** (correlation),
-   attack paths to **Ariadne** (synthesis), cloud edges to **Nubicustos**.
-   Caminus is the missing CI/CD node in that existing toolchain.
+4. **Pipeline-native output.** The JSON report is a clean, Vinculum-shaped
+   tool-output document so Caminus can slot into the suite (correlation →
+   Ariadne synthesis → Nubicustos cloud edges) as the missing CI/CD node. A
+   dedicated Vinculum/Ariadne exporter is not built (deferred indefinitely);
+   today the integration seam is the JSON/SARIF report.
 
 ---
 
@@ -101,7 +103,7 @@ Execution (PPE) classes:
                         │   (authorization-gated)                │
                         └───────────────┬───────────────────────┘
                                         ▼
-        reporter → text · json (Vinculum) · SARIF · Ariadne export
+        reporter → text · json (Vinculum-shaped) · SARIF
 ```
 
 Package layout (zero external Go dependencies, single binary — matches Vallum /
@@ -113,7 +115,7 @@ internal/model/        Finding + trust-graph types (Node/Edge/Graph/AttackPath)
 internal/workflow/     dependency-free line model of a pipeline file
 internal/rules/        static attack rules (CAM-INJ/PPE/RUN/PERM/SUP-*)
 internal/platform/     provider abstraction (github/gitlab clients land in M2)
-internal/reporter/     text + JSON (Vinculum-shaped); SARIF/Ariadne next
+internal/reporter/     text + JSON (Vinculum-shaped) + SARIF
 ```
 
 ### Design choices
@@ -127,12 +129,15 @@ internal/reporter/     text + JSON (Vinculum-shaped); SARIF/Ariadne next
   cannot recover. The dependency is isolated behind the build tag, so the default
   binary still links nothing third-party.
 - **Precision over recall on injection.** The direct injection rule fires only on
-  `run:` interpolation, *not* on the recommended `env:`-indirection remediation —
-  flagging best practice would destroy operator trust. The indirect rules
-  (`CAM-PPE-002` / `CAM-GL-INJ-002`) then catch the *unsafe use* of an env-routed
-  value one file-hop out, reading the executed file from disk and requiring a
-  genuinely unsafe shell use (unquoted / `eval` / command-substitution); a quoted
-  `"$VAR"` is left alone and an absent file produces nothing.
+  literal `${{ … }}` `run:` interpolation, *not* on the recommended
+  `env:`-indirection remediation — flagging best practice would destroy operator
+  trust. The follow-on rules then catch the cases where the routing was not
+  actually made safe, all sharing one shell-quote analyzer that requires a
+  genuinely unsafe use (unquoted / `eval` / command-substitution) and leaves a
+  quoted `"$VAR"` alone: `CAM-INJ-002` for an env-routed value used unsafely
+  inline in the same `run:`, and `CAM-PPE-002` / `CAM-GL-INJ-002` for the same
+  unsafe use one file-hop out (the executed file is read from disk; an absent
+  file produces nothing).
 - **`confirmable` is a first-class field.** It is the contract between the
   static stage and the exploit stage and the thing that differentiates Caminus
   from pattern scanners.
@@ -189,6 +194,10 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   (`repo:` / `project_path:`), and trust↔repo is gated by source platform.
 
 **M3.5 — deeper detection. ✅**
+- **Inline env-routed injection** (`CAM-INJ-002`): an attacker-controllable value
+  routed through `env:` (the form `CAM-INJ-001` treats as safe) but then used
+  unquoted / via `eval`/command-substitution directly in a `run:` shell — the
+  same-step completion of the injection family, disjoint from `CAM-INJ-001`.
 - **Indirect-PPE** (`CAM-PPE-002` / `CAM-GL-INJ-002`): untrusted input that is
   env-routed (GitHub) or auto-exported (`$CI_*`, GitLab) but then used unsafely
   inside a **local file the pipeline executes** (shell script, `Makefile` recipe,
@@ -204,9 +213,13 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   untrusted expression, which the line model cannot connect. Augments, never
   replaces, the line model (which still supplies line numbers and evidence).
 
-**M4 — distribution.**
-- GoReleaser (Linux/macOS/Windows), Homebrew/Scoop, a GitHub Action wrapper,
-  Docker image. Reusable-workflow + composite-action expansion.
+**M4 — distribution. (in progress)**
+- GoReleaser (Linux/macOS/Windows × amd64/arm64) with Homebrew tap + Scoop
+  bucket, gated so binary releases precede package-publish setup. ✅
+- GitHub Action (Docker) wrapping `caminus scan` for CI, with a SARIF/gate flow;
+  the `Dockerfile` is also a standalone Caminus image. ✅
+- *Dropped (indefinitely):* Vinculum + Ariadne export. Reusable-workflow +
+  composite-action expansion remains a future option.
 
 ---
 

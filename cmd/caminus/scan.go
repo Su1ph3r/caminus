@@ -20,7 +20,7 @@ import (
 func runScan(argv []string) int {
 	fs := flag.NewFlagSet("scan", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	format := fs.String("format", "text", "output format: text|json")
+	format := fs.String("format", "text", "output format: text|json|sarif")
 	minSev := fs.String("min-severity", "info", "report findings at or above: critical|high|medium|low|info")
 	gate := fs.String("gate", "high", "exit non-zero if any finding at or above this severity is reported (use 'none' to disable)")
 	platform := fs.String("platform", "auto", "pipeline platform: auto|github|gitlab")
