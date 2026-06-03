@@ -3,7 +3,12 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.7.0] — 2026-06-03
+
+Milestones **M5 (reusable workflows & composite actions)** and **M6 (precision/
+recall benchmark)**: Caminus now follows expression-injection taint across every
+GitHub-native code-reuse boundary, and ships a labeled corpus with a CI-gated
+scorer and measured comparisons against poutine and octoscan.
 
 ### Added — M6: precision/recall benchmark
 - **`benchmark/` — a labeled corpus + reproducible scorer.** 21 self-contained
