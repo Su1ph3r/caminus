@@ -5,6 +5,24 @@ All notable changes to Caminus are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added — reusable-workflow injection (M5, `CAM-PPE-003`)
+- **Cross-call-boundary expression injection through local reusable workflows.**
+  A caller on an attacker-influenced trigger that passes an untrusted expression
+  (`with: title: ${{ github.event.pull_request.title }}`) into a local reusable
+  workflow (`jobs.<id>.uses: ./.github/workflows/wf.yml`), where the called
+  workflow then interpolates `${{ inputs.<name> }}` directly into a `run:` shell.
+  The sink lives in a *different file* the caller hands execution to — invisible
+  to a scan of either file alone. Extends the CAM-PPE-002 file-hop model across
+  the call boundary, reusing the repo-root resolution, symlink-confined read, and
+  precision discipline: a remote `org/repo@ref` is out of scope (another repo,
+  unreadable — supply-chain's concern); an absent callee is silent (no
+  speculative FP); a present-but-unreadable callee is surfaced as UNASSESSED
+  (Info, below the default gate). Parses both block and flow-mapping `with:`
+  forms; gated on an attacker-influenced trigger so a static `with:` value never
+  flags. Confirmable; maps to the injection PoC generator. First increment of M5
+  (reusable workflows & composite actions) — composite actions and callee-side
+  env-routing follow.
+
 ### Fixed — packaging
 - **Migrated the deprecated GoReleaser `brews:` formula block to
   `homebrew_casks:`.** GoReleaser deprecated formula generation in favor of

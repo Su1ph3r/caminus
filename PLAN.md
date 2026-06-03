@@ -217,3 +217,32 @@ Getting Caminus into others' hands.
 - [ ] A real tagged release publishes the archives/checksums to GitHub, and the
   brew/scoop taps once `TAP_GITHUB_TOKEN` + the tap/bucket repos exist — **pending
   external setup** (see `RELEASING.md`).
+
+## M5 → reusable workflows & composite actions (depth — in progress)
+
+Follow the indirect-PPE dataflow across GitHub-native code-reuse boundaries — a
+known blind spot for many scanners — propagating the *caller's* trigger context.
+Same precision discipline as CAM-PPE-002 (absent target → silence; present-but-
+unreadable → UNASSESSED; symlink-confined read).
+
+- [x] **Local reusable-workflow injection** (`CAM-PPE-003`). Untrusted expression
+  passed via `with:` into `jobs.<id>.uses: ./.github/workflows/wf.yml`, then
+  interpolated as `${{ inputs.<name> }}` into a called `run:`. Block + flow `with:`
+  forms; trigger-gated; remote `org/repo@ref` out of scope; absent → silent;
+  unreadable → UNASSESSED. 8 unit tests + on-disk fixture
+  (`testdata/reusable-vuln/`) scanned end-to-end via the CLI. Dogfood clean.
+- [ ] **Local composite-action injection** (`CAM-PPE-004`, proposed). `steps[].uses:
+  ./path` → `path/action.yml` with `runs.using: composite`; map caller `with:`
+  untrusted values to `inputs.<name>`; flag `${{ inputs.<name> }}` in the
+  composite's `run:` steps.
+- [ ] **Unpinned/mutable reusable or composite ref** (`CAM-SUP-002`, proposed).
+  Remote `uses: org/repo/...@<mutable>` reusable workflow or action — cannot read
+  contents → supply-chain finding (poisoning vector) + UNASSESSED note.
+- [ ] **Callee-side env-routing** (follow-up). `env: X: ${{ inputs.title }}` then
+  `$X` used unquoted inside the called workflow/action — the second hop.
+
+### Acceptance
+`scan` flags a tainted input that reaches a `run:` across a reusable-workflow /
+composite-action boundary, stays silent on the safe-input and static-value forms,
+and never resolves a remote ref as a local file; `go test` / `-tags yaml` /
+`-tags cloud` green; dogfood self-scan still clean.

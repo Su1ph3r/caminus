@@ -1,0 +1,11 @@
+on:
+  workflow_call:
+    inputs:
+      title:
+        required: true
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Thanks for the PR: ${{ inputs.title }}"

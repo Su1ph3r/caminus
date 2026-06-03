@@ -213,13 +213,50 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   untrusted expression, which the line model cannot connect. Augments, never
   replaces, the line model (which still supplies line numbers and evidence).
 
-**M4 — distribution. (in progress)**
-- GoReleaser (Linux/macOS/Windows × amd64/arm64) with Homebrew tap + Scoop
-  bucket, gated so binary releases precede package-publish setup. ✅
+**M4 — distribution. ✅**
+- GoReleaser (Linux/macOS/Windows × amd64/arm64) with a Homebrew **cask** +
+  Scoop bucket, gated so binary releases precede package-publish setup. ✅
+  (`brews:`→`homebrew_casks:` after GoReleaser deprecated formula generation.)
 - GitHub Action (Docker) wrapping `caminus scan` for CI, with a SARIF/gate flow;
   the `Dockerfile` is also a standalone Caminus image. ✅
-- *Dropped (indefinitely):* Vinculum + Ariadne export. Reusable-workflow +
-  composite-action expansion remains a future option.
+- Acceptance verified 2026-06-03: `goreleaser check` clean, snapshot builds
+  archives+checksums+cask+scoop, Docker action gates (vuln→exit 1, safe→exit 0).
+- *Dropped (indefinitely):* Vinculum + Ariadne export.
+
+**M5 — reusable workflows & composite actions (depth). (next)**
+The execution handoffs the indirect-PPE rule does not yet follow — GitHub-native
+code reuse, a known blind spot for many scanners. Extends the same file-hop
+dataflow (`repoRootOf` → `readConfined` → quote analyzer) across the call
+boundary, propagating the *caller's* trigger context:
+- **Local reusable workflow** (`jobs.<id>.uses: ./.github/workflows/wf.yml` +
+  `with:`/`secrets:`): resolve the called workflow on disk; map caller-passed
+  untrusted values to the workflow's `inputs.<name>`; flag unsafe use of
+  `${{ inputs.<name> }}` (or its env-routed form) in a called `run:`.
+- **Local composite action** (`steps[].uses: ./path` → `path/action.yml` with
+  `runs.using: composite`): resolve `action.yml`/`action.yaml`; map caller `with:`
+  untrusted values to `inputs.<name>`; flag unsafe `${{ inputs.<name> }}` in the
+  composite's `run:` steps.
+- **Remote reusable workflow / action** (`uses: org/repo/...@ref`): cannot read
+  off-disk → a supply-chain finding for a mutable/unpinned ref (a poisoning
+  vector) plus an UNASSESSED note that the called code was not analyzed.
+- Proposed rule IDs (refine in implementation): `CAM-PPE-003` (reusable-workflow
+  injection), `CAM-PPE-004` (composite-action injection), `CAM-SUP-002`
+  (unpinned/mutable reusable-workflow or composite-action ref). Same precision
+  discipline: absent target → silence; present-but-unreadable → UNASSESSED.
+
+**M6 — benchmark & precision (credibility).**
+The artifact that lets Caminus *claim* de-facto status rather than assert it. A
+labeled corpus of real vulnerable/safe pipelines; measure Caminus FP/FN against
+`poutine` / `raven` / `octoscan` / `gato-x`; publish the methodology and numbers.
+
+**M7 — adoption (publish & demos).**
+Push the tag to cut the GitHub release; list the Action on the Marketplace; add a
+SARIF→code-scanning demo and a real-target dogfood writeup.
+
+**Post-1.0 — a third CI platform (breadth).**
+CircleCI / Azure Pipelines / Jenkinsfile / Bitbucket Pipelines (parser + rule
+parity). Deferred behind the depth + precision work above: breadth without a
+precision story is just more surface to get wrong.
 
 ---
 

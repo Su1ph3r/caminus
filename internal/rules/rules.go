@@ -22,6 +22,7 @@ func Default() []Rule {
 		ExpressionInjection{},
 		InlineEnvInjection{},
 		IndirectPPE{},
+		ReusableWorkflowInjection{},
 		PwnRequest{},
 		SelfHostedRunner{},
 		ExcessivePermissions{},
