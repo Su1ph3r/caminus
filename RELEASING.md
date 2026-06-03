@@ -25,14 +25,29 @@ steps are skipped (a warning, not a failure).
 To enable it:
 
 1. Create two repositories under the `Su1ph3r` org/account:
-   - `homebrew-tap` — formula lands in `Formula/caminus.rb`
-     (`brew install Su1ph3r/tap/caminus`).
+   - `homebrew-tap` — **cask** lands in `Casks/caminus.rb`
+     (`brew install --cask Su1ph3r/tap/caminus`). GoReleaser deprecated formula
+     generation, so Caminus ships a binary **cask**, not a formula.
    - `scoop-bucket` — manifest lands in `caminus.json`
      (`scoop bucket add su1ph3r https://github.com/Su1ph3r/scoop-bucket`).
 2. Create a fine-grained PAT with **contents: write** on both repos.
 3. Add it to the `caminus` repo as the **`TAP_GITHUB_TOKEN`** Actions secret.
 
-The next tagged release then commits the formula/manifest automatically.
+The next tagged release then commits the cask/manifest automatically.
+
+### macOS Gatekeeper (unsigned binary)
+
+The darwin binaries are **not** code-signed or notarized (that needs a paid
+Apple Developer account). The cask therefore carries a `postflight` hook that
+strips the `com.apple.quarantine` xattr so Gatekeeper does not block the binary
+on first run — the GoReleaser-recommended pattern for unsigned binary casks. The
+trust decision is made when the user taps `Su1ph3r/homebrew-tap`; integrity is
+still anchored by the `checksums.txt` the cask's sha256 values are pinned to.
+
+**Upgrade path (preferred once an Apple Developer account exists):** sign +
+notarize the darwin builds in the release pipeline (GoReleaser `notarize:` /
+`rcodesign`, or `gon`/`quill`) and **remove the quarantine-strip hook** — once
+notarized, Gatekeeper validates automatically and the strip is unnecessary.
 
 **Running GoReleaser locally:** the `skip_upload` templates read `SKIP_PKG_PUBLISH`
 from the environment (the CI workflow sets it). When running `goreleaser`

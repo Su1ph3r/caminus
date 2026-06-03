@@ -209,8 +209,11 @@ Getting Caminus into others' hands.
 - [x] `goreleaser check` passes (clean, no deprecations — 2026-06-03).
 - [x] Snapshot release builds archives + `checksums.txt` + cask + scoop manifest
   (proven via `goreleaser release --snapshot --clean`, 2026-06-03).
-- [ ] Docker action scans a repo and fails the step on a high/critical finding
-  (verified via the built image) — **pending** (needs Docker daemon running).
+- [x] Docker action scans a repo and fails the step on a high/critical finding
+  (verified via the built image, 2026-06-03): vuln fixture → 6 findings, gate
+  `high` → **exit 1** (step fails); safe fixture → exit 0; `gate: none` reports
+  but does not fail; hyphenated inputs (`INPUT_MIN-SEVERITY`) and SARIF-to-file
+  (`INPUT_OUTPUT`) both work; the default entrypoint runs as a general CLI image.
 - [ ] A real tagged release publishes the archives/checksums to GitHub, and the
   brew/scoop taps once `TAP_GITHUB_TOKEN` + the tap/bucket repos exist — **pending
   external setup** (see `RELEASING.md`).
