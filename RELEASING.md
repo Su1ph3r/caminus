@@ -64,3 +64,29 @@ The repository root doubles as a composable Docker action (`action.yml`,
 `Dockerfile`, `entrypoint.sh`). Consumers reference `Su1ph3r/caminus@<tag>`; the
 action builds the image from source at that ref, so it is always version-
 consistent with the tag. See the README "Use in CI" section for inputs.
+
+### Moving the `v0` major tag (do after each release)
+
+Consumers pin to a major tag (`Su1ph3r/caminus@v0`, the README example). After a
+release succeeds, move `v0` to the new release commit so `@v0` users get it:
+
+```bash
+git tag -f v0 v0.7.0      # point v0 at the just-released tag
+git push -f origin v0
+```
+
+(Once a `v1.0.0` exists, maintain `v1` the same way.)
+
+### Publishing to the GitHub Actions Marketplace (one-time UI step)
+
+Marketplace publishing cannot be done from the CLI — it is a checkbox in the
+release UI and a one-time agreement:
+
+1. The repo must be public and have `action.yml` at the root with a unique `name`
+   and a valid `branding` (icon from the Feather set + color). Caminus uses
+   `icon: shield`, `color: orange`, name `Caminus CI/CD Scan` — already set.
+2. Go to the release (Releases → the `v0.7.0` release → Edit), check
+   **"Publish this Action to the GitHub Marketplace"**, accept the GitHub
+   Marketplace Developer Agreement (first time only), pick categories
+   (Security / Continuous integration), and Update the release.
+3. Subsequent releases offer the same checkbox; the agreement is already accepted.
