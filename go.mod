@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.19
 	github.com/aws/aws-sdk-go-v2/service/iam v1.53.12
 	google.golang.org/api v0.282.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

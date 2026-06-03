@@ -144,6 +144,7 @@ against a target you own.
 | ID | Severity | What it catches |
 |----|----------|-----------------|
 | `CAM-INJ-001`  | Critical | Untrusted `${{ github.event.* }}` interpolated into a `run:` shell |
+| `CAM-PPE-002`  | Critical | Indirect PPE: untrusted input reaches a shell **inside a local file the pipeline runs** (script/Makefile/`package.json`), unquoted or via `eval` |
 | `CAM-PPE-001`  | Crit/High/Med | Pwn request: privileged trigger (± untrusted checkout) |
 | `CAM-RUN-001`  | High/Med | Self-hosted runner reachable by pipeline execution |
 | `CAM-PERM-001` | Medium | `GITHUB_TOKEN` granted `write-all` |
@@ -154,6 +155,7 @@ against a target you own.
 | ID | Severity | What it catches |
 |----|----------|-----------------|
 | `CAM-GL-INJ-001` | Critical | Untrusted `$CI_*` (MR/commit/branch field) interpolated into `script:` |
+| `CAM-GL-INJ-002` | Critical | Indirect injection: untrusted `$CI_*` reaches a shell **inside a local file the pipeline runs**, unquoted or via `eval` |
 | `CAM-GL-PPE-001` | Medium | Merge-request pipeline secret / `CI_JOB_TOKEN` exposure |
 | `CAM-GL-DBG-001` | High | `CI_DEBUG_TRACE`/`CI_DEBUG_SERVICES` leaking secrets to job logs |
 | `CAM-GL-RUN-001` | High/Med | Privileged Docker-in-Docker build |
@@ -169,7 +171,19 @@ against a target you own.
 Caminus deliberately does **not** flag untrusted input routed through an
 intermediate `env:` variable (GitHub) or a quoted environment read (GitLab) —
 that is the recommended remediation, and false-positiving on best practice
-erodes trust.
+erodes trust. The indirect rules (`CAM-PPE-002` / `CAM-GL-INJ-002`) close the
+flip side: routing is only safe if the value is then *used* safely, so when the
+pipeline hands execution to a local repo file that uses the value **unquoted**
+or via `eval`/command-substitution, that is flagged. The referenced file is read
+from disk relative to the repo root; if it is not present (e.g. a single-file
+scan) nothing is reported — no speculative findings.
+
+**Structural YAML (`-tags yaml`, optional).** The default engine is a
+zero-dependency line model. Building with `-tags yaml` links `gopkg.in/yaml.v3`
+(isolated behind the tag, exactly like the cloud SDKs) and lets the indirect
+rules resolve YAML anchors/aliases and flow forms — e.g. an `env:` value supplied
+through an alias whose anchored source is the untrusted expression, which the
+line model cannot connect. Detection is otherwise identical.
 
 ## Development
 
@@ -177,6 +191,10 @@ erodes trust.
 go vet ./...
 go test ./...
 go build -o caminus ./cmd/caminus
+
+# Optional structural-YAML engine (anchor/alias/flow resolution):
+go test -tags yaml ./...
+go build -tags yaml -o caminus ./cmd/caminus
 ```
 
 See [`DESIGN.md`](./DESIGN.md) for architecture, the attack taxonomy, and the

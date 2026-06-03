@@ -63,8 +63,10 @@ Execution (PPE) classes:
   *Confirmable.*
 - **Direct-PPE** — attacker controls the pipeline definition (write access /
   branch without protection).
-- **Indirect-PPE** — injection into a pipeline-referenced file (Makefile, npm
-  script, test config) executed by the pipeline.
+- **Indirect-PPE** — injection into a pipeline-referenced file (shell script,
+  Makefile recipe, npm/package.json script) executed by the pipeline, reached by
+  an env-routed (GitHub) or auto-exported (`$CI_*`, GitLab) untrusted value used
+  unquoted or via `eval`/command-substitution. *Confirmable.*
 - **Runner exposure** (CICD-SEC-7) — non-ephemeral self-hosted runners reachable
   by untrusted code.
 - **Excessive permissions** (CICD-SEC-5) — over-broad `GITHUB_TOKEN` / job
@@ -116,14 +118,21 @@ internal/reporter/     text + JSON (Vinculum-shaped); SARIF/Ariadne next
 
 ### Design choices
 
-- **Line-oriented, not YAML-AST (for now).** The rules reason about textual
-  patterns and need exact line numbers + original text for evidence and for the
-  exploit stage. A structural parse augments this behind a build tag later;
-  hand-rolling it now would add a dependency and brittleness for little gain.
-- **Precision over recall on injection.** The injection rule fires only on
-  direct `run:` interpolation, *not* on the recommended `env:`-indirection
-  remediation — flagging best practice would destroy operator trust. Unsafe use
-  of env-routed values needs dataflow (a later milestone).
+- **Line-oriented by default; structural on demand.** The rules reason about
+  textual patterns and need exact line numbers + original text for evidence and
+  for the exploit stage, so the default engine is a zero-dependency line model.
+  A structural parse (`-tags yaml`, `gopkg.in/yaml.v3`) *augments* — never
+  replaces — it: the line model still supplies line numbers and evidence, while
+  the structural parser resolves anchors/aliases and flow forms the textual scan
+  cannot recover. The dependency is isolated behind the build tag, so the default
+  binary still links nothing third-party.
+- **Precision over recall on injection.** The direct injection rule fires only on
+  `run:` interpolation, *not* on the recommended `env:`-indirection remediation —
+  flagging best practice would destroy operator trust. The indirect rules
+  (`CAM-PPE-002` / `CAM-GL-INJ-002`) then catch the *unsafe use* of an env-routed
+  value one file-hop out, reading the executed file from disk and requiring a
+  genuinely unsafe shell use (unquoted / `eval` / command-substitution); a quoted
+  `"$VAR"` is left alone and an absent file produces nothing.
 - **`confirmable` is a first-class field.** It is the contract between the
   static stage and the exploit stage and the thing that differentiates Caminus
   from pattern scanners.
@@ -178,6 +187,22 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
 - `cloud` resolves the OIDC→cloud blast radius for **GitLab as well as GitHub**:
   the trust model carries the CI issuer, subject matching is grammar-agnostic
   (`repo:` / `project_path:`), and trust↔repo is gated by source platform.
+
+**M3.5 — deeper detection. ✅**
+- **Indirect-PPE** (`CAM-PPE-002` / `CAM-GL-INJ-002`): untrusted input that is
+  env-routed (GitHub) or auto-exported (`$CI_*`, GitLab) but then used unsafely
+  inside a **local file the pipeline executes** (shell script, `Makefile` recipe,
+  `package.json` script). Follows `run:`/`script:` invocations to on-disk files,
+  resolves the repo root from the pipeline path, and applies a shell-quote
+  analyzer (unquoted / `eval` / `$(…)` / backtick = unsafe; `"$VAR"` = safe). An
+  absent referenced file yields no finding — no speculative FPs. This realizes
+  the env-routed dataflow `CAM-INJ-001` deferred, one file-hop out.
+- **Structural YAML** (`-tags yaml`): opt-in `gopkg.in/yaml.v3` engine isolated
+  behind the build tag (like the cloud SDKs; default binary links nothing
+  third-party). It resolves anchors/aliases and flow forms for the indirect
+  rules — e.g. an `env:` value supplied via an alias whose anchored source is the
+  untrusted expression, which the line model cannot connect. Augments, never
+  replaces, the line model (which still supplies line numbers and evidence).
 
 **M4 — distribution.**
 - GoReleaser (Linux/macOS/Windows), Homebrew/Scoop, a GitHub Action wrapper,

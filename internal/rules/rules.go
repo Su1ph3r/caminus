@@ -20,6 +20,7 @@ type Rule interface {
 func Default() []Rule {
 	return []Rule{
 		ExpressionInjection{},
+		IndirectPPE{},
 		PwnRequest{},
 		SelfHostedRunner{},
 		ExcessivePermissions{},

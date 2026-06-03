@@ -3,6 +3,60 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.0] — 2026-06-02
+
+Milestone **M3.5 complete**: indirect Poisoned Pipeline Execution detection and
+an opt-in structural-YAML engine.
+
+### Added — indirect-PPE detection (default build, zero new deps)
+- `CAM-PPE-002` (GitHub Actions) and `CAM-GL-INJ-002` (GitLab CI): an attacker-
+  controllable value that is routed through an `env:` variable (GitHub) or
+  auto-exported as `$CI_*` (GitLab) — the form the direct-injection rules treat
+  as safe — but then reaches a shell **inside a local file the pipeline
+  executes** (a shell script, a `Makefile` recipe, or a `package.json` script),
+  used unquoted or via `eval`/command-substitution. This closes the dataflow gap
+  `CAM-INJ-001` documented as a later milestone, one file-hop out.
+- `internal/rules/indirect.go`: follows `run:`/`script:` invocations to on-disk
+  files (interpreter + path, `./script`, `make` → `Makefile`, `npm/yarn/pnpm` →
+  `package.json`), resolves the repo root from the pipeline path, and runs a
+  precise shell-quote analyzer (unquoted / `eval` / `$(…)` / backtick = unsafe;
+  `"$VAR"` and `'$VAR'` = safe). A referenced file that is absent on disk yields
+  **no finding** — no speculative false positives. Both rules are `confirmable`
+  and reuse the injection PoC generator.
+
+### Added — structural YAML engine (`-tags yaml`, optional)
+- `internal/rules/structural.go` (+ `structural_stub.go` for the default build):
+  an opt-in parser using `gopkg.in/yaml.v3`, isolated behind the `yaml` build tag
+  exactly like the cloud SDKs, so the default binary stays dependency-free. It
+  resolves YAML anchors/aliases and flow forms for the indirect rules — e.g. an
+  `env:` value supplied through an alias whose anchored source is the untrusted
+  expression, which the line model cannot connect. Behavior is otherwise
+  identical; build-tagged tests pin both the line-model limitation and the
+  structural recall win.
+- CI builds/tests both configurations (`go test -tags yaml ./...`).
+
+### Hardened — finalize review (security / quality / silent-failure / breaking-change)
+- **Symlink escape (blocker):** following a referenced script could read a file
+  outside the scanned repo (a malicious pipeline symlinking a "script" to
+  `/etc/passwd`). The referenced-file read now resolves the real path
+  (`EvalSymlinks`) and re-confines it within the symlink-resolved repo root, and
+  ignores non-regular files — so the scanner never reads outside the tree.
+- **No silent "clean" on unanalyzable files:** a referenced, pipeline-executed
+  file that is *present but unreadable or unparseable* (permissions, encoding,
+  malformed `package.json`) is now surfaced as an **Info "UNASSESSED" finding**
+  rather than scored clean. Info ranks below the default `--gate high`, so it
+  never breaks an existing CI gate, and is non-confirmable so it never reaches
+  the exploit stage. An *absent* file still yields nothing (no speculation).
+- **Precision (false-positive fixes):** `make`/`npm` analysis is now scoped to
+  the invoked target — `make build` no longer flags an unsafe recipe in an
+  unrelated `release:` target, and `npm ci` analyzes only install-lifecycle
+  scripts, not an unused `deploy` script. The shell-quote analyzer handles
+  backslash escaping (`echo "\"$X\""` is no longer mis-flagged), folds backslash
+  line-continuations, and skips heredoc bodies (data, not command positions).
+  `bash -c '<inline>'` is no longer mistaken for a file reference; single-line
+  flow-form `env: { … }` is parsed by the line model.
+- **Resource bound:** referenced (attacker-named) files are read with a 5 MiB cap.
+
 ## [0.5.0] — 2026-06-01
 
 Milestone **M3 complete**: dynamic confirmation end to end — live, reversible

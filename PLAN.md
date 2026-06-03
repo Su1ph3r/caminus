@@ -161,7 +161,28 @@ Multi-platform enum + multi-cloud blast radius.
   issuer-aware trust model, grammar-agnostic subject classify, platform-gated
   matching; CAM-OIDC-002 fires for GitLab projects.
 
+## M3.5 → v0.6.0 (done)
+
+Deeper detection, no token required.
+- [x] **Indirect-PPE** — `CAM-PPE-002` (GitHub) + `CAM-GL-INJ-002` (GitLab):
+  untrusted input that is env-routed (GitHub) or auto-exported (`$CI_*`, GitLab)
+  but then used unsafely (unquoted / `eval` / `$(…)` / backtick) **inside a local
+  file the pipeline executes** — shell script, `Makefile` recipe, or
+  `package.json` script. Resolves the repo root from the pipeline path, reads the
+  referenced file from disk, and emits nothing when the file is absent (no
+  speculative FPs). Both confirmable; reuse the injection PoC generator. Zero-dep.
+- [x] **Structural YAML (`-tags yaml`)** — opt-in `gopkg.in/yaml.v3` engine,
+  isolated behind the build tag like the cloud SDKs; resolves anchors/aliases and
+  flow forms for the indirect rules (catches alias-supplied untrusted env the
+  line model cannot connect). Stub under the default build; identical detection
+  otherwise. Build-tagged tests pin line-model-misses vs structural-catches.
+
+### Acceptance
+`scan` flags an unquoted untrusted var in an executed script (and stays silent on
+the quoted-safe form); default build links **0** YAML packages, `-tags yaml`
+links yaml.v3; `go test` / `-tags yaml` / `-tags cloud` all green; dogfood
+self-scan still clean.
+
 ## Later milestones
-- **M3.5 / detection:** indirect-PPE; structural YAML (`-tags yaml`).
 - **M4 / pipeline:** Vinculum + Ariadne export; GoReleaser/Homebrew/Scoop, a
   GitHub Action wrapper.

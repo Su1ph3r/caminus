@@ -21,6 +21,7 @@ type GitLabRule interface {
 func DefaultGitLab() []GitLabRule {
 	return []GitLabRule{
 		GLExpressionInjection{},
+		GLIndirectInjection{},
 		GLMergeRequestExposure{},
 		GLDebugTrace{},
 		GLPrivilegedRunner{},
