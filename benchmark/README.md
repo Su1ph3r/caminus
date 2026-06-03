@@ -105,3 +105,9 @@ A like-for-like comparison against `poutine`, `raven`, `octoscan`, and `gato-x`
 runs the same corpus through each tool and maps its output to the per-case ground
 truth. Status and methodology: see [`COMPARISON.md`](COMPARISON.md). Numbers are
 only published for tools actually executed — no estimated or asserted figures.
+
+**Measured so far (2026-06-03):** `poutine` (run on Linux/WSL) — 4/12 covered
+classes, 0 FP, and it catches one of Caminus's three documented gaps
+(`gap-github-script`). The two tools are largely complementary; see COMPARISON.md
+for the per-case table and the important note that this corpus is shaped toward
+Caminus's classes and is a coverage comparison, not an unbiased tool ranking.

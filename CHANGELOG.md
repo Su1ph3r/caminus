@@ -17,8 +17,17 @@ All notable changes to Caminus are documented here. Format loosely follows
   precision 100%, recall 100% over covered classes, 0 FP on the 6 near-miss
   cases. The 3 honest coverage gaps (github-script `script:` injection, nested
   composite actions, local JS actions) are documented and tested as the frontier.
-  Now a CI regression gate. Cross-tool comparison vs poutine/raven/octoscan/
-  gato-x scaffolded in `COMPARISON.md` (numbers only for tools actually run).
+  Now a CI regression gate. **Cross-tool comparison: `poutine` measured** on the
+  same corpus (Linux/WSL — its analyzer needs a real git repo and does not load
+  under Windows go-git): poutine detects 4/12 covered classes with 0 FP and
+  catches one of Caminus's three documented gaps (`gap-github-script`), confirming
+  the corpus is not rigged. Caminus's edge is dataflow depth (env-routed /
+  indirect / reusable-workflow / composite-action injection, GitLab injection,
+  plain unpinned tags); the tools are complementary. Harness
+  (`compare_poutine.sh`, `score_comparison.py`) + raw results
+  (`results-poutine.jsonl`) committed; `raven`/`gato-x`/`octoscan` status recorded
+  honestly in `COMPARISON.md`. The corpus is Caminus-class-shaped (stated up
+  front) — a coverage comparison, not an unbiased ranking.
 
 ### Added — M5 tail: callee env-routing + remote reusable-ref supply-chain
 - **Callee-side env-routing for `CAM-PPE-003` / `CAM-PPE-004`.** The reusable-

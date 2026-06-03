@@ -1,0 +1,21 @@
+{"id":"gap-github-script","rules":["default_permissions_on_risky_events", "injection"]}
+{"id":"gap-local-js-action","rules":["default_permissions_on_risky_events"]}
+{"id":"gap-nested-composite","rules":["default_permissions_on_risky_events", "unpinnable_action"]}
+{"id":"gl-debug","rules":["debug_enabled"]}
+{"id":"gl-inj","rules":[]}
+{"id":"inj-direct","rules":["default_permissions_on_risky_events", "injection"]}
+{"id":"inj-envrouted","rules":["default_permissions_on_risky_events"]}
+{"id":"perm-writeall","rules":[]}
+{"id":"ppe-composite","rules":["default_permissions_on_risky_events"]}
+{"id":"ppe-indirect-script","rules":["default_permissions_on_risky_events"]}
+{"id":"ppe-pwnrequest","rules":["default_permissions_on_risky_events", "untrusted_checkout_exec"]}
+{"id":"ppe-reusable","rules":["default_permissions_on_risky_events"]}
+{"id":"run-selfhosted","rules":["pr_runs_on_self_hosted"]}
+{"id":"safe-composite-safeinput","rules":["default_permissions_on_risky_events"]}
+{"id":"safe-indirect-quoted","rules":["default_permissions_on_risky_events"]}
+{"id":"safe-inj-envrouted-quoted","rules":["default_permissions_on_risky_events"]}
+{"id":"safe-reusable-pinned","rules":[]}
+{"id":"safe-reusable-static","rules":["default_permissions_on_risky_events"]}
+{"id":"safe-sup-pinned","rules":[]}
+{"id":"sup-reusable-mutable","rules":[]}
+{"id":"sup-unpinned","rules":[]}

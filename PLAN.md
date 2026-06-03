@@ -274,9 +274,16 @@ The artifact that lets Caminus *claim* de-facto status rather than assert it.
   scores **per rule class** (`expect`/`forbid`), and is wired into `go test ./...`
   as a CI regression gate. Baseline: precision 100%, recall 100% over covered
   classes, 0 FP on the 6 near-miss cases; 3 honest gaps documented + tested.
-- [ ] **Cross-tool comparison** (`COMPARISON.md`). Run the same corpus through
-  `poutine` / `raven` / `octoscan` / `gato-x`, map findings to ground truth,
-  publish the table. Numbers only for tools actually executed (no asserted data).
+- [~] **Cross-tool comparison** (`COMPARISON.md`). `poutine` measured 2026-06-03
+  (Linux/WSL — its analyzer needs a real git repo, doesn't load under Windows
+  go-git): 4/12 covered classes, 0 FP, catches 1 of Caminus's 3 gaps
+  (`gap-github-script`). Complementary tools — Caminus wins on dataflow depth
+  (env-routed/indirect/reusable/composite injection + GitLab + unpinned), poutine
+  on `github-script`. Harness (`compare_poutine.sh`, `score_comparison.py`) and
+  raw results (`results-poutine.jsonl`) committed. `octoscan` next; `raven`
+  (needs Neo4j/Redis) and `gato-x` (online/token) not suited to an offline tree —
+  documented honestly, not estimated. Corpus is Caminus-class-shaped (stated up
+  front in COMPARISON.md) — a coverage comparison, not an unbiased ranking.
 
 ### Acceptance
 `go test ./benchmark/` prints the scorecard and fails on any FN / near-miss FP /
