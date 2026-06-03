@@ -1,0 +1,21 @@
+{"id":"gap-github-script","platform":"github","rules":["expression-injection"]}
+{"id":"gap-local-js-action","platform":"github","rules":["expression-injection", "local-action"]}
+{"id":"gap-nested-composite","platform":"github","rules":["expression-injection", "local-action"]}
+{"id":"gl-debug","platform":"gitlab","rules":[]}
+{"id":"gl-inj","platform":"gitlab","rules":[]}
+{"id":"inj-direct","platform":"github","rules":["expression-injection"]}
+{"id":"inj-envrouted","platform":"github","rules":[]}
+{"id":"perm-writeall","platform":"github","rules":[]}
+{"id":"ppe-composite","platform":"github","rules":["expression-injection", "local-action"]}
+{"id":"ppe-indirect-script","platform":"github","rules":[]}
+{"id":"ppe-pwnrequest","platform":"github","rules":["dangerous-checkout"]}
+{"id":"ppe-reusable","platform":"github","rules":["local-action"]}
+{"id":"run-selfhosted","platform":"github","rules":["runner-label"]}
+{"id":"safe-composite-safeinput","platform":"github","rules":["expression-injection", "local-action"]}
+{"id":"safe-indirect-quoted","platform":"github","rules":[]}
+{"id":"safe-inj-envrouted-quoted","platform":"github","rules":[]}
+{"id":"safe-reusable-pinned","platform":"github","rules":[]}
+{"id":"safe-reusable-static","platform":"github","rules":["local-action"]}
+{"id":"safe-sup-pinned","platform":"github","rules":[]}
+{"id":"sup-reusable-mutable","platform":"github","rules":[]}
+{"id":"sup-unpinned","platform":"github","rules":[]}

@@ -106,8 +106,17 @@ runs the same corpus through each tool and maps its output to the per-case groun
 truth. Status and methodology: see [`COMPARISON.md`](COMPARISON.md). Numbers are
 only published for tools actually executed — no estimated or asserted figures.
 
-**Measured so far (2026-06-03):** `poutine` (run on Linux/WSL) — 4/12 covered
-classes, 0 FP, and it catches one of Caminus's three documented gaps
-(`gap-github-script`). The two tools are largely complementary; see COMPARISON.md
-for the per-case table and the important note that this corpus is shaped toward
-Caminus's classes and is a coverage comparison, not an unbiased tool ranking.
+**Measured so far (2026-06-03):**
+
+- `poutine` (Linux/WSL) — 4/12 covered classes, 0 FP, catches 1 of Caminus's 3
+  gaps (`gap-github-script`).
+- `octoscan` (Synacktiv, Go) — 4/10 covered GitHub classes (GitLab N/A,
+  GitHub-only), **1 FP** (precision 80%), and it catches **all 3** of Caminus's
+  gaps via a coarse input-side heuristic — the same coarseness that produces the
+  false positive on `safe-composite-safeinput`.
+
+The three tools are complementary; Caminus is the only one covering env-routed /
+indirect-file / reusable-workflow / supply-chain / GitLab classes, and it held
+100% precision. See [`COMPARISON.md`](COMPARISON.md) for the per-case tables, the
+measured precision/recall tradeoff, and the note that this corpus is shaped toward
+Caminus's classes (a coverage comparison, not an unbiased ranking).

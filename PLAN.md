@@ -274,16 +274,22 @@ The artifact that lets Caminus *claim* de-facto status rather than assert it.
   scores **per rule class** (`expect`/`forbid`), and is wired into `go test ./...`
   as a CI regression gate. Baseline: precision 100%, recall 100% over covered
   classes, 0 FP on the 6 near-miss cases; 3 honest gaps documented + tested.
-- [~] **Cross-tool comparison** (`COMPARISON.md`). `poutine` measured 2026-06-03
-  (Linux/WSL — its analyzer needs a real git repo, doesn't load under Windows
-  go-git): 4/12 covered classes, 0 FP, catches 1 of Caminus's 3 gaps
-  (`gap-github-script`). Complementary tools — Caminus wins on dataflow depth
-  (env-routed/indirect/reusable/composite injection + GitLab + unpinned), poutine
-  on `github-script`. Harness (`compare_poutine.sh`, `score_comparison.py`) and
-  raw results (`results-poutine.jsonl`) committed. `octoscan` next; `raven`
-  (needs Neo4j/Redis) and `gato-x` (online/token) not suited to an offline tree —
-  documented honestly, not estimated. Corpus is Caminus-class-shaped (stated up
-  front in COMPARISON.md) — a coverage comparison, not an unbiased ranking.
+- [x] **Cross-tool comparison** (`COMPARISON.md`). Two tools measured 2026-06-03:
+  - **poutine** (Linux/WSL): 4/12 covered classes, 0 FP, catches 1 gap
+    (`gap-github-script`).
+  - **octoscan** (Synacktiv, Go, GitHub-only): 4/10 covered GitHub classes (GitLab
+    N/A), **1 FP** (precision 80%), catches all 3 gaps via a coarse input-side
+    heuristic — the same coarseness that causes the FP on `safe-composite-
+    safeinput`. A measured precision/recall tradeoff: Caminus traces dataflow to
+    the sink (0 FP, misses the 3 unmodeled-sink gaps); octoscan flags input-side
+    (catches the gaps, 1 FP).
+  - Harnesses (`compare_poutine.sh`, `compare_octoscan.sh`, `score_comparison.py`)
+    + raw results (`results-{poutine,octoscan}.jsonl`) committed. `raven` (Neo4j/
+    Redis) and `gato-x` (online/token) not suited to an offline tree — documented,
+    not estimated. Corpus is Caminus-class-shaped (stated up front) — a coverage
+    comparison, not a ranking. **Actionable: the 3 gaps are candidates for an
+    UNASSESSED-style "untrusted input crosses into an unresolvable action sink"
+    rule that keeps precision while closing the recall gap.**
 
 ### Acceptance
 `go test ./benchmark/` prints the scorecard and fails on any FN / near-miss FP /

@@ -25,9 +25,15 @@ All notable changes to Caminus are documented here. Format loosely follows
   indirect / reusable-workflow / composite-action injection, GitLab injection,
   plain unpinned tags); the tools are complementary. Harness
   (`compare_poutine.sh`, `score_comparison.py`) + raw results
-  (`results-poutine.jsonl`) committed; `raven`/`gato-x`/`octoscan` status recorded
-  honestly in `COMPARISON.md`. The corpus is Caminus-class-shaped (stated up
-  front) — a coverage comparison, not an unbiased ranking.
+  (`results-poutine.jsonl`) committed. **`octoscan` (Synacktiv) also measured:**
+  GitHub-only (GitLab N/A), 4/10 covered GitHub classes, **1 FP** (precision 80%),
+  and it catches all 3 of Caminus's gaps via a coarse input-side
+  `expression-injection` heuristic — the same coarseness that produces the FP on
+  `safe-composite-safeinput`. This is a measured precision/recall tradeoff:
+  Caminus traces dataflow to the sink (0 FP, misses the 3 unmodeled-sink gaps),
+  octoscan flags input-side (catches the gaps, 1 FP). `raven`/`gato-x` recorded as
+  not-suited-to-offline in `COMPARISON.md`. The corpus is Caminus-class-shaped
+  (stated up front) — a coverage comparison, not an unbiased ranking.
 
 ### Added — M5 tail: callee env-routing + remote reusable-ref supply-chain
 - **Callee-side env-routing for `CAM-PPE-003` / `CAM-PPE-004`.** The reusable-
