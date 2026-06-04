@@ -223,35 +223,34 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   archives+checksums+cask+scoop, Docker action gates (vuln→exit 1, safe→exit 0).
 - *Dropped (indefinitely):* Vinculum + Ariadne export.
 
-**M5 — reusable workflows & composite actions (depth). (next)**
-The execution handoffs the indirect-PPE rule does not yet follow — GitHub-native
-code reuse, a known blind spot for many scanners. Extends the same file-hop
-dataflow (`repoRootOf` → `readConfined` → quote analyzer) across the call
-boundary, propagating the *caller's* trigger context:
-- **Local reusable workflow** (`jobs.<id>.uses: ./.github/workflows/wf.yml` +
-  `with:`/`secrets:`): resolve the called workflow on disk; map caller-passed
-  untrusted values to the workflow's `inputs.<name>`; flag unsafe use of
-  `${{ inputs.<name> }}` (or its env-routed form) in a called `run:`.
-- **Local composite action** (`steps[].uses: ./path` → `path/action.yml` with
-  `runs.using: composite`): resolve `action.yml`/`action.yaml`; map caller `with:`
-  untrusted values to `inputs.<name>`; flag unsafe `${{ inputs.<name> }}` in the
-  composite's `run:` steps.
-- **Remote reusable workflow / action** (`uses: org/repo/...@ref`): cannot read
-  off-disk → a supply-chain finding for a mutable/unpinned ref (a poisoning
-  vector) plus an UNASSESSED note that the called code was not analyzed.
-- Proposed rule IDs (refine in implementation): `CAM-PPE-003` (reusable-workflow
-  injection), `CAM-PPE-004` (composite-action injection), `CAM-SUP-002`
-  (unpinned/mutable reusable-workflow or composite-action ref). Same precision
-  discipline: absent target → silence; present-but-unreadable → UNASSESSED.
+**M5 — reusable workflows & composite actions (depth). ✅ (v0.7.0)**
+Injection taint followed across GitHub-native code-reuse boundaries — a known
+scanner blind spot. `CAM-PPE-003` (local reusable-workflow injection),
+`CAM-PPE-004` (local composite-action injection) — both direct `${{ inputs.X }}`
+and env-routed second-hop sinks — and `CAM-SUP-002` (remote reusable workflow on
+a mutable ref; High with `secrets: inherit`). Same precision discipline: absent
+target → silence, present-but-unreadable → UNASSESSED, remote refs out of scope.
 
-**M6 — benchmark & precision (credibility).**
-The artifact that lets Caminus *claim* de-facto status rather than assert it. A
-labeled corpus of real vulnerable/safe pipelines; measure Caminus FP/FN against
-`poutine` / `raven` / `octoscan` / `gato-x`; publish the methodology and numbers.
+**M6 — benchmark & precision (credibility). ✅ (v0.7.0)**
+`benchmark/`: a labeled corpus + a CI-gated scorer (`go test ./benchmark/`),
+measured precision/recall, and a like-for-like comparison against `poutine` and
+`octoscan` (`COMPARISON.md`). `raven`/`gato-x` are not offline-tree analyzers and
+were recorded as not-run rather than estimated.
 
-**M7 — adoption (publish & demos).**
-Push the tag to cut the GitHub release; list the Action on the Marketplace; add a
-SARIF→code-scanning demo and a real-target dogfood writeup.
+**M7 — adoption (publish & demos). ✅ (v0.7.0 / v0.7.1)**
+Tagged releases (GoReleaser archives + checksums); the README "Use in CI" section
+is the SARIF→code-scanning demo; the `v0` floating tag resolves `…/caminus@v0`.
+v0.7.1 publishes a multi-arch container image to `ghcr.io/su1ph3r/caminus`.
+Marketplace publication is a one-time repo-owner UI step (see `RELEASING.md`).
+
+**M7.5 — close the benchmark frontier. ✅ (v0.7.1)**
+Acting on M6's finding (octoscan's input-side check caught three cases Caminus
+missed, at the cost of a false positive): `CAM-INJ-003` models the
+actions/github-script `script:` eval (confident), and `CAM-PPE-005` raises an
+Info/UNASSESSED signal when a tainted input crosses into an action whose sink
+cannot be resolved (a forwarding composite, or a JS/Docker action) — staying
+silent on the resolvable-safe composite. Caminus now covers all 15 corpus classes
+at 100% precision; the frontier moves to `$GITHUB_ENV` cross-step laundering.
 
 **Post-1.0 — a third CI platform (breadth).**
 CircleCI / Azure Pipelines / Jenkinsfile / Bitbucket Pipelines (parser + rule

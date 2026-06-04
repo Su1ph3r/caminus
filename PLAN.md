@@ -291,8 +291,35 @@ The artifact that lets Caminus *claim* de-facto status rather than assert it.
     UNASSESSED-style "untrusted input crosses into an unresolvable action sink"
     rule that keeps precision while closing the recall gap.**
 
-### Acceptance
+### Acceptance — met 2026-06-03
 `go test ./benchmark/` prints the scorecard and fails on any FN / near-miss FP /
-newly-covered gap; `COMPARISON.md` carries real measured columns for each tool
-that runs in the local environment, and an honest "not run here" for any that
-cannot.
+newly-covered gap; `COMPARISON.md` carries real measured columns for poutine and
+octoscan, and an honest "not run here" for raven/gato-x.
+
+## M7 → adoption (publish) — done 2026-06-03
+
+- [x] **Released v0.7.0** (GoReleaser: 6 os/arch archives + `checksums.txt`,
+  "Latest"); **v0.7.1** adds the gap-closing rules + the GHCR image.
+- [x] **`v0` floating major tag** → the release commit (has `action.yml`, so
+  `Su1ph3r/caminus@v0` resolves). Release trigger restricted to `v[0-9]+.…` so
+  moving `v0`/`v1` does not re-trigger GoReleaser.
+- [x] **SARIF→code-scanning demo** = the README "Use in CI" section
+  (`github/codeql-action/upload-sarif`).
+- [x] **Container image** to `ghcr.io/su1ph3r/caminus` (multi-arch, SHA-pinned
+  Docker actions) — the tap-free universal install (v0.7.1).
+- [ ] **Marketplace publish** — a one-time repo-owner UI checkbox on the release +
+  Developer Agreement; not API-toggleable. Steps in `RELEASING.md`. (User to do.)
+
+## M7.5 → close the benchmark frontier — done 2026-06-03 (v0.7.1)
+
+- [x] **`CAM-INJ-003`** — actions/github-script `script:` injection (confident).
+- [x] **`CAM-PPE-005`** — untrusted input into an action whose sink Caminus can't
+  resolve (non-composite JS/Docker, or a forwarding composite) → Info/UNASSESSED;
+  silent on the resolvable-safe composite (0 FP). Closes the 3 M6 gaps; Caminus
+  now 15/15 covered at 100% precision. New honest gap: `$GITHUB_ENV` cross-step
+  laundering (missed by all three tools).
+
+## Post-1.0 backlog
+- 3rd CI platform (CircleCI / Azure Pipelines / Jenkinsfile / Bitbucket).
+- `$GITHUB_ENV` / `$GITHUB_OUTPUT` / `${{ steps.*.outputs.* }}` cross-step taint.
+- Nested-composite/reusable N-hop resolution; raven/gato-x comparison harness.
