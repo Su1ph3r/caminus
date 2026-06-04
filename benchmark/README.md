@@ -73,8 +73,8 @@ action pinned to a *SHA*. Caminus must stay silent on all of them.
 ## Current results (2026-06-03)
 
 ```
-corpus: 22 cases  (15 covered-vuln, 6 safe, 1 known-gap)
-TP=15  FN=0  FP=0  TN=6   (gaps: 1 missed, 0 now-covered)
+corpus: 23 cases  (15 covered-vuln, 7 safe, 1 known-gap)
+TP=15  FN=0  FP=0  TN=7   (gaps: 1 missed, 0 now-covered)
 precision = 100.0%
 recall    = 100.0%   (over covered classes; gaps excluded by design)
 ```

@@ -15,6 +15,7 @@
 {"id":"safe-composite-safeinput","rules":["default_permissions_on_risky_events"]}
 {"id":"safe-indirect-quoted","rules":["default_permissions_on_risky_events"]}
 {"id":"safe-inj-envrouted-quoted","rules":["default_permissions_on_risky_events"]}
+{"id":"safe-quoted-path","rules":["default_permissions_on_risky_events"]}
 {"id":"safe-reusable-pinned","rules":[]}
 {"id":"safe-reusable-static","rules":["default_permissions_on_risky_events"]}
 {"id":"safe-sup-pinned","rules":[]}

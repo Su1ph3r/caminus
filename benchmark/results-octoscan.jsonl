@@ -15,6 +15,7 @@
 {"id":"safe-composite-safeinput","platform":"github","rules":["expression-injection", "local-action"]}
 {"id":"safe-indirect-quoted","platform":"github","rules":[]}
 {"id":"safe-inj-envrouted-quoted","platform":"github","rules":[]}
+{"id":"safe-quoted-path","platform":"github","rules":[]}
 {"id":"safe-reusable-pinned","platform":"github","rules":[]}
 {"id":"safe-reusable-static","platform":"github","rules":["local-action"]}
 {"id":"safe-sup-pinned","platform":"github","rules":[]}

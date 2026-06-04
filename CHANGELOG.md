@@ -3,6 +3,37 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.8.0] — 2026-06-04
+
+Pre-1.0 hardening: a precision fix found by real-world validation, plus a
+documented stability commitment and scope.
+
+### Fixed — precision
+- **Indirect-PPE no longer treats a quoted script path as executed.** Validating
+  `scan` against real repos (cli/cli, goreleaser, grafana — 114 workflow files,
+  zero crashes) surfaced a false positive: `echo "Found blob reports in ./blobs:"`
+  matched `./blobs` as a directly-executed script and emitted a spurious
+  UNASSESSED. The script-ref extractor now uses the shell quote analyzer to skip
+  interpreter/path/`make`/`npm` matches that sit inside a string literal (a quoted
+  *mention* is data, not execution); a command-substitution / backtick context is
+  still treated as executed. Real execution (`bash ./build.sh`) still flags.
+  Regression-tested as unit cases and as a new benchmark precision case
+  (`safe-quoted-path`).
+
+### Added — 1.0 readiness
+- **`SECURITY.md`** — private vulnerability reporting, supported versions, and an
+  explicit **stability commitment**: the `scan` CLI + flags + exit codes, the
+  JSON/SARIF schemas, existing rule IDs, and the Action inputs are treated as
+  stable; `enum`/`graph`/`cloud`/`exploit` and `-tags yaml` are labeled
+  **experimental** and out of the stability guarantee. Platform scope (GitHub
+  Actions + GitLab CI; others post-1.0) is stated.
+- README marks the dynamic commands experimental, drops a stale "(planned)
+  exploit" note, and adds a **Stability & scope** section.
+- **Real-world validation:** `scan` exercised on 114 real workflow files with no
+  crashes; findings corroborated by zizmor's published `ignore` annotations on
+  grafana, and near-zero noise on a SHA-pinned repo (goreleaser: 2 findings).
+- Benchmark grown to 23 cases (7 safe) — still 100% precision / 100% recall.
+
 ## [0.7.1] — 2026-06-03
 
 Closes the three coverage gaps the v0.7.0 benchmark documented — without losing

@@ -108,7 +108,11 @@ caminus scan . --gate critical      # exit 1 only on critical
 caminus scan . --gate none          # never fail the build
 ```
 
-### Trust graph & attack paths (token required)
+### Trust graph & attack paths (token required) — *experimental*
+
+> `enum` / `graph` / `cloud` are **experimental** (not covered by the stability
+> commitment in [`SECURITY.md`](./SECURITY.md)); they need a token and, for
+> `cloud`, credentials for a target you own.
 
 ```bash
 # 1. Enumerate into a trust graph (or --replay a cassette). Pick a platform:
@@ -130,7 +134,10 @@ This surfaces chains like *poisoned pipeline → OIDC federation → assumable c
 identity* (`CAM-OIDC-002`: an AWS role, GCP service account, or Azure app), plus
 paths to self-hosted runners and CI secrets — for both GitHub and GitLab graphs.
 
-### Confirm a finding (PoC generation)
+### Confirm a finding (PoC generation) — *experimental*
+
+> `exploit` (including `--arm`) is **experimental** and only ever targets a CI
+> repository you own or are authorized to test. See [`SECURITY.md`](./SECURITY.md).
 
 `exploit` turns a **confirmable** finding into a concrete, non-destructive PoC —
 the attack input / pipeline payload with a benign canary — plus a reversible
@@ -178,8 +185,8 @@ $ caminus scan testdata/vuln-pwn-request.yml
 6 finding(s): 3 critical, 1 high, 1 medium, 1 low, 0 info
 ```
 
-The `[confirmable]` tag marks findings the (planned) `exploit` stage can prove
-against a target you own.
+The `[confirmable]` tag marks findings the `exploit` stage can prove against a
+target you own.
 
 ## Rules
 
@@ -239,9 +246,9 @@ line model cannot connect. Detection is otherwise identical.
 ## Benchmark — precision & recall
 
 Caminus ships a labeled corpus and a reproducible scorer in [`benchmark/`](./benchmark/).
-On 22 ground-truth cases (`go test ./benchmark/`), Caminus measures **100%
+On 23 ground-truth cases (`go test ./benchmark/`), Caminus measures **100%
 precision and 100% recall over its 15 covered classes, with 0 false positives** on
-six recommended-safe near-misses (env-routed-but-quoted, reusable-passed-static,
+seven recommended-safe cases (env-routed-but-quoted, reusable-passed-static,
 SHA-pinned, …) — the patterns a line-grep scanner flags by mistake.
 [`benchmark/COMPARISON.md`](./benchmark/COMPARISON.md) has the measured, per-case
 comparison against `poutine` and `octoscan`: a real precision/recall tradeoff
@@ -264,6 +271,18 @@ go build -tags yaml -o caminus ./cmd/caminus
 See [`DESIGN.md`](./DESIGN.md) for architecture, the attack taxonomy, and the full
 roadmap (GitLab CI, SARIF, authenticated enumeration, OIDC graph, dynamic
 confirmation, reusable-workflow / composite-action injection, and the benchmark).
+
+## Stability & scope
+
+- **Platforms:** GitHub Actions and GitLab CI. Other CI systems (CircleCI, Azure
+  Pipelines, Jenkins, Bitbucket) are post-1.0 — see [`PLAN.md`](./PLAN.md).
+- **Stable surface** (changes avoided + noted in `CHANGELOG.md`): the `scan`
+  command + flags + exit codes, the JSON/SARIF schemas, existing rule IDs, and the
+  Action inputs.
+- **Experimental** (may change without a major bump): `enum` / `graph` / `cloud`
+  and `exploit` (auth/target-dependent), and the `-tags yaml` engine.
+
+Full policy and vulnerability reporting: [`SECURITY.md`](./SECURITY.md).
 
 ## License
 

@@ -241,6 +241,25 @@ w safe-indirect-quoted/ci/build.sh <<'S'
 echo building "$TITLE"
 S
 
+# A script path only MENTIONED inside a quoted echo string is not executed —
+# the real-world FP class found scanning grafana (echo "...in ./blobs:"). The
+# script exists and would flag if executed; Caminus must stay silent.
+w safe-quoted-path/.github/workflows/wf.yml <<'Y'
+name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: echo "see ./build.sh for the build steps"
+Y
+w safe-quoted-path/build.sh <<'S'
+#!/bin/bash
+echo building $TITLE
+S
+
 w safe-sup-pinned/.github/workflows/wf.yml <<'Y'
 name: ci
 on: [push]

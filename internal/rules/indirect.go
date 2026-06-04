@@ -74,8 +74,15 @@ func scriptRefsFrom(lines []string, isExec func(int) bool) []scriptRef {
 		if !isExec(i) {
 			continue
 		}
-		for _, m := range reInterpShell.FindAllStringSubmatch(line, -1) {
-			flags, path := m[1], m[2]
+		// A command/path matched *inside a string literal* is not executed — it is
+		// text (e.g. `echo "see ./blobs"`, `echo "run make foo"`). Only matches in a
+		// command position (unquoted, or inside $()/backticks which are themselves
+		// executed) are real execution. quoteStateAt classifies the position.
+		for _, loc := range reInterpShell.FindAllStringSubmatchIndex(line, -1) {
+			if inStringLiteral(line, loc[0]) {
+				continue
+			}
+			flags, path := line[loc[2]:loc[3]], line[loc[4]:loc[5]]
 			// `bash -c '<script>'` / `sh -c …` runs an inline script, not a file.
 			if strings.Contains(flags, "-c") {
 				continue
@@ -85,20 +92,40 @@ func scriptRefsFrom(lines []string, isExec func(int) bool) []scriptRef {
 				add(scriptRef{Line: i + 1, Path: path, Kind: "shell", Raw: strings.TrimSpace(line)})
 			}
 		}
-		for _, m := range reDirectExec.FindAllStringSubmatch(line, -1) {
-			path := strings.Trim(strings.TrimSpace(m[1]), `"'`)
+		for _, loc := range reDirectExec.FindAllStringSubmatchIndex(line, -1) {
+			if inStringLiteral(line, loc[2]) {
+				continue
+			}
+			path := strings.Trim(strings.TrimSpace(line[loc[2]:loc[3]]), `"'`)
 			if looksLocalPath(path) {
 				add(scriptRef{Line: i + 1, Path: path, Kind: "shell", Raw: strings.TrimSpace(line)})
 			}
 		}
-		if m := reMake.FindStringSubmatch(line); m != nil {
-			add(scriptRef{Line: i + 1, Path: "Makefile", Kind: "make", Target: m[2], Raw: strings.TrimSpace(line)})
+		if loc := reMake.FindStringSubmatchIndex(line); loc != nil && !inStringLiteral(line, loc[0]) {
+			target := ""
+			if loc[4] >= 0 {
+				target = line[loc[4]:loc[5]]
+			}
+			add(scriptRef{Line: i + 1, Path: "Makefile", Kind: "make", Target: target, Raw: strings.TrimSpace(line)})
 		}
-		if m := reNPM.FindStringSubmatch(line); m != nil {
-			add(scriptRef{Line: i + 1, Path: "package.json", Kind: "npm", Target: npmScriptName(m[1]), Raw: strings.TrimSpace(line)})
+		if loc := reNPM.FindStringSubmatchIndex(line); loc != nil && !inStringLiteral(line, loc[0]) {
+			add(scriptRef{Line: i + 1, Path: "package.json", Kind: "npm", Target: npmScriptName(line[loc[2]:loc[3]]), Raw: strings.TrimSpace(line)})
 		}
 	}
 	return out
+}
+
+// inStringLiteral reports whether byte position pos on a shell line is inside a
+// single- or double-quoted string (where a command/path token is data, not an
+// executed command). A command-substitution or backtick context is NOT a string
+// literal — its contents are executed — so it returns false there.
+func inStringLiteral(line string, pos int) bool {
+	switch quoteStateAt(line, pos) {
+	case quoteSingle, quoteDouble:
+		return true
+	default:
+		return false
+	}
 }
 
 // npmScriptName parses the tokens after npm/yarn/pnpm and returns the script

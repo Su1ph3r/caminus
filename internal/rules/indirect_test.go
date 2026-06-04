@@ -100,6 +100,59 @@ func TestIndirectPPE_SafeWhenQuoted(t *testing.T) {
 	}
 }
 
+// wfQuotedPathMention only *mentions* a script path inside a quoted echo string;
+// it never executes it. The indirect extractor must not treat the quoted path as
+// an executed file (the real-world false positive found scanning grafana's
+// `echo "Found blob reports in ./blobs:"`).
+const wfQuotedPathMention = `name: ci
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: echo "see ./build.sh for details"
+`
+
+func TestIndirectPPE_QuotedPathMentionNotExecuted(t *testing.T) {
+	// build.sh exists AND would flag if executed (unquoted $TITLE), so a finding
+	// here would be a false positive: the path is only named in a quoted string.
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml": wfQuotedPathMention,
+		"build.sh":                 "#!/bin/bash\necho $TITLE\n",
+	})
+	if ids := ghFindings(t, root); has(ids, "CAM-PPE-002") {
+		t.Fatalf("a script path only mentioned inside a quoted echo is not executed; must not flag, got %v", ids)
+	}
+}
+
+const wfQuotedPathExecuted = `name: ci
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - run: bash ./build.sh
+`
+
+func TestIndirectPPE_RealExecutionStillFlags(t *testing.T) {
+	// The companion to the above: the same script, actually executed, still flags.
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml": wfQuotedPathExecuted,
+		"build.sh":                 "#!/bin/bash\necho $TITLE\n",
+	})
+	if ids := ghFindings(t, root); !has(ids, "CAM-PPE-002") {
+		t.Fatalf("an actually-executed script with an unquoted untrusted var must still flag, got %v", ids)
+	}
+}
+
 func TestIndirectPPE_EvalIsUnsafeEvenQuoted(t *testing.T) {
 	root := writeRepo(t, map[string]string{
 		".github/workflows/wf.yml": wfEnvRoutedShell,
