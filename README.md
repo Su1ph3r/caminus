@@ -1,34 +1,25 @@
 # Caminus
 
-**Multi-platform CI/CD pipeline attack framework.**
+Multi-platform CI/CD pipeline security scanner and attack-path tool.
 
-Caminus maps a pipeline compromise as a trust graph — from an attacker-controllable
-trigger to its blast radius (secrets, self-hosted runners, and, via OIDC, cloud
-roles and the resources behind them) — and is built to dynamically confirm the
-primitives it finds, not just flag YAML patterns.
+Caminus scans GitHub Actions and GitLab CI for the ways a pipeline gets
+compromised: expression injection, poisoned pipeline execution, pwn-requests,
+self-hosted runner exposure, over-broad tokens, unpinned actions, and OIDC trust.
+Beyond the static scan it can enumerate a repo or org into a trust graph, resolve
+the OIDC-to-cloud blast radius, and generate a reversible proof-of-concept for the
+findings it can confirm against a target you own.
 
-*Caminus* (Latin: forge, hearth, furnace) — the forge is where source is turned
-into shipped artifacts, and where the supply chain breaks.
+Single static binary, no third-party dependencies in the core build. Linux,
+macOS, Windows. Cloud enumeration (`caminus cloud`) uses the official AWS, GCP,
+and Azure SDKs and is built only with `-tags cloud`; the default build links
+nothing third-party.
 
-Single binary, dependency-free core. Linux, macOS, Windows. (Cloud
-enumeration — `caminus cloud` — uses the official AWS / GCP / Azure SDKs and is
-built only with `-tags cloud`; the default build links no third-party packages.)
+## Why
 
-> **Status:** the full pipeline works — `scan` (GitHub Actions + GitLab CI),
-> `enum` (GitHub **and** GitLab), `graph`, `cloud` (AWS, GCP, Azure OIDC
-> blast-radius, for GitHub **and** GitLab graphs), and `exploit` (PoC generation
-> **plus** live, reversible arming). See [`DESIGN.md`](./DESIGN.md) §Roadmap and
-> [`PLAN.md`](./PLAN.md).
-
----
-
-## Why Caminus
-
-The CI/CD attack-tool landscape splits into static scanners (poutine, Raven)
-that only flag patterns, and GitHub-only exploitation tools (gato-x). None
-unifies **multi-platform** coverage, an **OIDC → cloud blast-radius** graph, and
-**dynamic confirmation** in one tool. Caminus fills that middle and slots into the
-existing pipeline (Reticustos → **Caminus** → Vinculum → Ariadne / Nubicustos).
+Most CI/CD security tools either flag YAML patterns (poutine, Raven) or only do
+GitHub-side exploitation (gato-x). Caminus covers both GitHub Actions and GitLab
+CI, builds an OIDC-to-cloud blast-radius graph, and can confirm a finding against
+a repo you own rather than only reporting it.
 
 Findings map to the OWASP Top 10 CI/CD Security Risks and the Poisoned Pipeline
 Execution (PPE) classes.
@@ -255,8 +246,8 @@ SHA-pinned, …) — the patterns a line-grep scanner flags by mistake.
 [`benchmark/COMPARISON.md`](./benchmark/COMPARISON.md) has the measured, per-case
 comparison against `poutine` and `octoscan`: a real precision/recall tradeoff
 where Caminus matches their injection reach at **0 false positives** (octoscan
-pays 1 FP for the same recall). One honest gap remains (`$GITHUB_ENV` cross-step
-laundering) — and it is missed by every tool benchmarked.
+pays 1 FP for the same recall). One gap remains (`$GITHUB_ENV` cross-step
+laundering), which every tool benchmarked also misses.
 
 ## Development
 

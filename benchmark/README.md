@@ -1,14 +1,13 @@
 # Caminus benchmark — precision & recall
 
-This is the credibility artifact for Caminus: a **labeled corpus** of CI/CD
-pipelines with ground truth, and a reproducible scorer that measures Caminus's
-false-negative and false-positive rates per rule class.
+A labeled corpus of CI/CD pipelines with ground truth, and a reproducible scorer
+that measures Caminus's false-negative and false-positive rates per rule class.
 
-The corpus encodes **known** pipeline-attack patterns (OWASP CICD-SEC, GitHub
-Security Lab pwn-request / untrusted-input research, reusable-workflow and
-composite-action injection) — *including patterns Caminus does not yet detect*.
-The scorecard is therefore an honest statement of coverage, not a victory lap:
-the "known coverage gaps" section is a permanent, tested record of the frontier.
+The corpus encodes known pipeline-attack patterns (OWASP CICD-SEC, GitHub Security
+Lab pwn-request / untrusted-input research, reusable-workflow and composite-action
+injection), including patterns Caminus does not yet detect. The "known coverage
+gaps" section is a permanent, tested record of those, so the scorecard reflects
+real coverage rather than only the cases Caminus handles.
 
 ## Run it
 
@@ -64,11 +63,11 @@ true positive even in a file whose injection is safely written. So scoring is
 
 `precision = TP / (TP + FP)`  ·  `recall = TP / (TP + FN)` (over covered classes).
 
-The **safe / near-miss** cases are the heart of the precision claim: each is the
-exact pattern a naive line-grep scanner false-positives on — an env-routed value
-that *is* quoted, a reusable workflow passed a *static* value, a composite using
-only a *non-tainted* input, an executed script that *quotes* the variable, an
-action pinned to a *SHA*. Caminus must stay silent on all of them.
+The safe / near-miss cases test precision: each is a pattern a line-grep scanner
+tends to false-positive on — an env-routed value that is quoted, a reusable
+workflow passed a static value, a composite using only a non-tainted input, an
+executed script that quotes the variable, an action pinned to a SHA. Caminus must
+stay silent on all of them.
 
 ## Current results (2026-06-03)
 
@@ -83,7 +82,7 @@ Covered classes: `CAM-INJ-001/002/003`, `CAM-PPE-001/002/003/004/005`,
 `CAM-RUN-001`, `CAM-PERM-001`, `CAM-SUP-001/002`, `CAM-GL-INJ-001`,
 `CAM-GL-DBG-001`.
 
-### Closing the frontier (M7)
+### Closing the gaps (M7)
 
 The three gaps the M6 benchmark exposed are now **closed** — and closed without
 losing precision (still 0 FP):
@@ -98,7 +97,7 @@ losing precision (still 0 FP):
   The Info tier keeps it below the gate and out of the precision-sensitive set,
   and it stays silent on the *resolvable-safe* composite (no false UNASSESSED).
 
-### Known coverage gap (the honest frontier)
+### Known coverage gap
 
 One real, exploitable pattern remains uncovered — and is missed by **all three**
 scanners benchmarked, not just Caminus:

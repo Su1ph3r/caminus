@@ -146,17 +146,17 @@ internal/reporter/     text + JSON (Vinculum-shaped) + SARIF
 
 ## Roadmap
 
-**M1 — static engine (this milestone). ✅**
+**M1 — static engine (this milestone). (done)**
 GitHub Actions rules (injection, pwn-request, self-hosted runner, write-all,
 unpinned actions), text + JSON output, severity gate, tests. Single binary.
 
-**M1.5 — coverage & output. ✅ (shipped in v0.1.0)**
+**M1.5 — coverage & output. (done) (shipped in v0.1.0)**
 - GitLab CI (`.gitlab-ci.yml`) static rules: script injection, MR-pipeline
   exposure, debug-trace, privileged dind, unpinned include.
 - SARIF reporter (CI gate, code scanning).
 - *Deferred:* indirect-PPE, structural YAML (`-tags yaml`), Ariadne export.
 
-**M2 — enumeration & graph. ✅**
+**M2 — enumeration & graph. (done)**
 - `internal/platform/github` read-only client (stdlib http): repos, workflows
   (→ static rules → entry points), self-hosted runners, secret names,
   environments + protection rules, branch protection, OIDC subject claims;
@@ -166,7 +166,7 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   policies **directly via the AWS SDK** (the security-critical trust matching is
   dependency-free and unit-tested; the SDK fetch is isolated behind the `cloud`
   build tag so the default binary links nothing third-party).
-**M2.5 — multi-platform enum & multi-cloud blast radius. ✅**
+**M2.5 — multi-platform enum & multi-cloud blast radius. (done)**
 - `internal/platform/gitlab` read-only client (stdlib http): groups/projects,
   `.gitlab-ci.yml` (→ GitLab rules → entry points), runners, CI/CD variables,
   `id_tokens:` OIDC; same host-gated token / pagination / `enum_incomplete`
@@ -177,7 +177,7 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   SDKs isolated behind `-tags cloud`, default binary still links nothing
   third-party. Real-SDK record/replay tests, no cloud account needed.
 
-**M3 — dynamic confirmation. ✅**
+**M3 — dynamic confirmation. (done)**
 - `exploit` (`internal/exploit`) generates the concrete artifact (attack input /
   workflow payload with a benign canary) for `confirmable` findings — injection,
   pwn-request, self-hosted runner, and the OIDC→cloud assumption (provider- and
@@ -193,7 +193,7 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   the trust model carries the CI issuer, subject matching is grammar-agnostic
   (`repo:` / `project_path:`), and trust↔repo is gated by source platform.
 
-**M3.5 — deeper detection. ✅**
+**M3.5 — deeper detection. (done)**
 - **Inline env-routed injection** (`CAM-INJ-002`): an attacker-controllable value
   routed through `env:` (the form `CAM-INJ-001` treats as safe) but then used
   unquoted / via `eval`/command-substitution directly in a `run:` shell — the
@@ -213,17 +213,17 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   untrusted expression, which the line model cannot connect. Augments, never
   replaces, the line model (which still supplies line numbers and evidence).
 
-**M4 — distribution. ✅**
+**M4 — distribution. (done)**
 - GoReleaser (Linux/macOS/Windows × amd64/arm64) with a Homebrew **cask** +
-  Scoop bucket, gated so binary releases precede package-publish setup. ✅
+  Scoop bucket, gated so binary releases precede package-publish setup. (done)
   (`brews:`→`homebrew_casks:` after GoReleaser deprecated formula generation.)
 - GitHub Action (Docker) wrapping `caminus scan` for CI, with a SARIF/gate flow;
-  the `Dockerfile` is also a standalone Caminus image. ✅
+  the `Dockerfile` is also a standalone Caminus image. (done)
 - Acceptance verified 2026-06-03: `goreleaser check` clean, snapshot builds
   archives+checksums+cask+scoop, Docker action gates (vuln→exit 1, safe→exit 0).
 - *Dropped (indefinitely):* Vinculum + Ariadne export.
 
-**M5 — reusable workflows & composite actions (depth). ✅ (v0.7.0)**
+**M5 — reusable workflows & composite actions (depth). (done) (v0.7.0)**
 Injection taint followed across GitHub-native code-reuse boundaries — a known
 scanner blind spot. `CAM-PPE-003` (local reusable-workflow injection),
 `CAM-PPE-004` (local composite-action injection) — both direct `${{ inputs.X }}`
@@ -231,19 +231,19 @@ and env-routed second-hop sinks — and `CAM-SUP-002` (remote reusable workflow 
 a mutable ref; High with `secrets: inherit`). Same precision discipline: absent
 target → silence, present-but-unreadable → UNASSESSED, remote refs out of scope.
 
-**M6 — benchmark & precision (credibility). ✅ (v0.7.0)**
+**M6 — benchmark & precision (credibility). (done) (v0.7.0)**
 `benchmark/`: a labeled corpus + a CI-gated scorer (`go test ./benchmark/`),
 measured precision/recall, and a like-for-like comparison against `poutine` and
 `octoscan` (`COMPARISON.md`). `raven`/`gato-x` are not offline-tree analyzers and
 were recorded as not-run rather than estimated.
 
-**M7 — adoption (publish & demos). ✅ (v0.7.0 / v0.7.1)**
+**M7 — adoption (publish & demos). (done) (v0.7.0 / v0.7.1)**
 Tagged releases (GoReleaser archives + checksums); the README "Use in CI" section
 is the SARIF→code-scanning demo; the `v0` floating tag resolves `…/caminus@v0`.
 v0.7.1 publishes a multi-arch container image to `ghcr.io/su1ph3r/caminus`.
 Marketplace publication is a one-time repo-owner UI step (see `RELEASING.md`).
 
-**M7.5 — close the benchmark frontier. ✅ (v0.7.1)**
+**M7.5 — close the benchmark frontier. (done) (v0.7.1)**
 Acting on M6's finding (octoscan's input-side check caught three cases Caminus
 missed, at the cost of a false positive): `CAM-INJ-003` models the
 actions/github-script `script:` eval (confident), and `CAM-PPE-005` raises an

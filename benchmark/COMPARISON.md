@@ -109,7 +109,7 @@ gaps. In M7 Caminus **closed them** the precision-preserving way: `CAM-INJ-003`
 models the github-script `script:` eval directly (a confident detection), and
 `CAM-PPE-005` raises an **Info/UNASSESSED** signal when a tainted input crosses
 into an action whose sink it cannot resolve (a nested-forwarding composite, or a
-JS/Docker action). Crucially, `CAM-PPE-005` stays **silent on the resolvable-safe
+JS/Docker action). `CAM-PPE-005` stays **silent on the resolvable-safe
 composite** — Caminus reads the manifest, sees `title` is unused, and does not
 raise it — so Caminus now matches octoscan's reach on this surface **without
 inheriting its false positive**. The remaining honest gap (`$GITHUB_ENV` cross-
