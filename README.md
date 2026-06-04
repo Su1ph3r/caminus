@@ -41,19 +41,15 @@ dependency-free core build; the cloud and structural-YAML engines are opt-in
 source builds (see below).
 
 ```bash
-# Homebrew (macOS / Linux)
-brew install Su1ph3r/tap/caminus
-
-# Scoop (Windows)
-scoop bucket add su1ph3r https://github.com/Su1ph3r/scoop-bucket
-scoop install caminus
-
-# Docker (build the image, then scan a mounted repo)
-docker build -t caminus .
-docker run --rm -v "$PWD:/repo" -w /repo caminus scan .
+# Docker — pull the published image and scan a mounted repo (no toolchain needed)
+docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/su1ph3r/caminus:latest scan .
 
 # From source
 go install github.com/Su1ph3r/caminus/cmd/caminus@latest
+
+# Homebrew (macOS) / Scoop (Windows) — once the tap/bucket are published
+brew install --cask Su1ph3r/tap/caminus
+scoop bucket add su1ph3r https://github.com/Su1ph3r/scoop-bucket && scoop install caminus
 
 # With cloud blast-radius support (AWS / GCP / Azure SDKs):
 go build -tags cloud -o caminus ./cmd/caminus

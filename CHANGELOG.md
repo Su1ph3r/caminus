@@ -28,6 +28,13 @@ precision (still 0 false positives on the near-miss set).
   cross-step laundering, missed by Caminus, poutine, and octoscan alike. Caminus
   now matches octoscan's injection-into-action reach at 0 FP (octoscan pays 1 FP).
 
+### Added — distribution
+- **Container image on GHCR.** The release now builds and pushes a multi-arch
+  (linux/amd64 + arm64) image to `ghcr.io/su1ph3r/caminus` (`:{version}`, `:v0`,
+  `:latest`) — a universal `docker run … ghcr.io/su1ph3r/caminus:latest scan .`
+  install that needs no Homebrew/Scoop tap. The publish job uses SHA-pinned Docker
+  actions (the tool's own `CAM-SUP-001` discipline).
+
 ## [0.7.0] — 2026-06-03
 
 Milestones **M5 (reusable workflows & composite actions)** and **M6 (precision/
