@@ -78,6 +78,16 @@ git push -f origin v1
 
 (`v0` still points at the latest `v0.x` for anyone pinned there.)
 
+### Making the GHCR image public (one-time UI step)
+
+The image is published by the release workflow's `GITHUB_TOKEN`. A package first
+pushed while the repo was private stays **private**, and making the repo public
+does not change it (package visibility is separate, and there is no REST endpoint
+for it). To let `docker pull ghcr.io/su1ph3r/caminus` work for everyone:
+
+1. https://github.com/users/Su1ph3r/packages/container/caminus/settings
+2. Danger Zone → **Change visibility** → **Public**.
+
 ### Publishing to the GitHub Actions Marketplace (one-time UI step)
 
 Marketplace publishing cannot be done from the CLI — it is a checkbox in the
