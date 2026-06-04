@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Su1ph3r/caminus@v0   # pin to a release tag/SHA in practice
+      - uses: Su1ph3r/caminus@v1   # pin to a release tag/SHA in practice
         with:
           path: .
           format: sarif

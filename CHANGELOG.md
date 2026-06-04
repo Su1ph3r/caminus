@@ -3,10 +3,25 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.8.0] — 2026-06-04
+## [1.0.0] — 2026-06-04
 
-Pre-1.0 hardening: a precision fix found by real-world validation, plus a
-documented stability commitment and scope.
+**First stable release.** Caminus is a multi-platform CI/CD pipeline attack
+framework: `scan` (GitHub Actions + GitLab CI static analysis, 18 rules across
+injection / PPE / pwn-request / runner / permissions / supply-chain / OIDC, with
+SARIF + a CI gate), and the supported `enum` → `graph` → `cloud` → `exploit`
+toolkit (trust-graph enumeration, OIDC→cloud blast-radius, and reversible PoC
+confirmation). Distributed as cross-platform binaries, a multi-arch GHCR image,
+and a GitHub Action.
+
+1.0 is cut after: a measured precision/recall benchmark (100%/100% over 15
+covered classes, 0 FP on the near-miss set) with comparisons to poutine and
+octoscan; real-world `scan` validation on 114 third-party workflow files (no
+crashes, zizmor-corroborated); and an end-to-end real-target validation of the
+`enum`/`graph`/`exploit --arm` chain. See [`SECURITY.md`](./SECURITY.md) for the
+stability commitment (the `scan` surface, JSON/SARIF, rule IDs, and Action inputs
+are stable; the trust-graph/PoC schemas are supported-but-evolving).
+
+This release also includes the pre-1.0 hardening below.
 
 ### Fixed — precision
 - **Indirect-PPE no longer treats a quoted script path as executed.** Validating

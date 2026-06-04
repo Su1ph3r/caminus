@@ -67,15 +67,16 @@ consistent with the tag. See the README "Use in CI" section for inputs.
 
 ### Moving the `v0` major tag (do after each release)
 
-Consumers pin to a major tag (`Su1ph3r/caminus@v0`, the README example). After a
-release succeeds, move `v0` to the new release commit so `@v0` users get it:
+Consumers pin to a major tag (`Su1ph3r/caminus@v1`, the README example). After a
+release succeeds, move the major tag to the new release commit so `@vN` users get
+it:
 
 ```bash
-git tag -f v0 v0.7.0      # point v0 at the just-released tag
-git push -f origin v0
+git tag -f v1 v1.0.0      # point v1 at the just-released tag
+git push -f origin v1
 ```
 
-(Once a `v1.0.0` exists, maintain `v1` the same way.)
+(`v0` still points at the latest `v0.x` for anyone pinned there.)
 
 ### Publishing to the GitHub Actions Marketplace (one-time UI step)
 
