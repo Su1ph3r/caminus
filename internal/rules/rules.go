@@ -21,6 +21,7 @@ func Default() []Rule {
 	return []Rule{
 		ExpressionInjection{},
 		InlineEnvInjection{},
+		GitHubScriptInjection{},
 		IndirectPPE{},
 		ReusableWorkflowInjection{},
 		CompositeActionInjection{},

@@ -193,6 +193,7 @@ against a target you own.
 |----|----------|-----------------|
 | `CAM-INJ-001`  | Critical | Untrusted `${{ github.event.* }}` interpolated into a `run:` shell |
 | `CAM-INJ-002`  | Critical | Env-routed untrusted input used **unquoted** (or via `eval`/command-substitution) in a `run:` shell |
+| `CAM-INJ-003`  | Critical | Untrusted `${{ github.event.* }}` interpolated into an `actions/github-script` `script:` (a JavaScript eval sink) |
 | `CAM-PPE-002`  | Critical | Indirect PPE: untrusted input reaches a shell **inside a local file the pipeline runs** (script/Makefile/`package.json`), unquoted or via `eval` |
 | `CAM-PPE-003`  | Critical | Reusable-workflow injection: untrusted `with:` input reaches a `run:` in a called local reusable workflow (direct `${{ inputs.X }}` or env-routed unquoted) |
 | `CAM-PPE-004`  | Critical | Composite-action injection: untrusted `with:` input reaches a `run:` in a local composite action's `action.yml` |
@@ -201,6 +202,7 @@ against a target you own.
 | `CAM-PERM-001` | Medium | `GITHUB_TOKEN` granted `write-all` |
 | `CAM-SUP-001`  | Low | Third-party action not pinned to a commit SHA |
 | `CAM-SUP-002`  | Med/High | Remote reusable workflow on a mutable ref (High with `secrets: inherit`) |
+| `CAM-PPE-005`  | Info | Untrusted input reaches a local action whose injection sink can't be resolved (non-composite JS/Docker action, or a composite that forwards it onward) — UNASSESSED, not silently clean |
 
 **GitLab CI**
 
@@ -241,14 +243,15 @@ line model cannot connect. Detection is otherwise identical.
 ## Benchmark — precision & recall
 
 Caminus ships a labeled corpus and a reproducible scorer in [`benchmark/`](./benchmark/).
-On 21 ground-truth cases (`go test ./benchmark/`), Caminus measures **100%
-precision and 100% recall over its covered classes, with 0 false positives** on
+On 22 ground-truth cases (`go test ./benchmark/`), Caminus measures **100%
+precision and 100% recall over its 15 covered classes, with 0 false positives** on
 six recommended-safe near-misses (env-routed-but-quoted, reusable-passed-static,
-SHA-pinned, …) — the patterns a line-grep scanner flags by mistake. The corpus
-also tracks three honest coverage gaps as a permanent, tested record of the
-frontier. [`benchmark/COMPARISON.md`](./benchmark/COMPARISON.md) has the measured,
-per-case comparison against `poutine` and `octoscan` (a real precision/recall
-tradeoff, not an asserted ranking).
+SHA-pinned, …) — the patterns a line-grep scanner flags by mistake.
+[`benchmark/COMPARISON.md`](./benchmark/COMPARISON.md) has the measured, per-case
+comparison against `poutine` and `octoscan`: a real precision/recall tradeoff
+where Caminus matches their injection reach at **0 false positives** (octoscan
+pays 1 FP for the same recall). One honest gap remains (`$GITHUB_ENV` cross-step
+laundering) — and it is missed by every tool benchmarked.
 
 ## Development
 

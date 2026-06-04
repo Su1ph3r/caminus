@@ -1,0 +1,10 @@
+name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: echo "LAUNDERED=$TITLE" >> "$GITHUB_ENV"
+      - run: echo building $LAUNDERED

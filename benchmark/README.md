@@ -73,31 +73,44 @@ action pinned to a *SHA*. Caminus must stay silent on all of them.
 ## Current results (2026-06-03)
 
 ```
-corpus: 21 cases  (12 covered-vuln, 6 safe, 3 known-gap)
-TP=12  FN=0  FP=0  TN=6   (gaps: 3 missed, 0 now-covered)
+corpus: 22 cases  (15 covered-vuln, 6 safe, 1 known-gap)
+TP=15  FN=0  FP=0  TN=6   (gaps: 1 missed, 0 now-covered)
 precision = 100.0%
 recall    = 100.0%   (over covered classes; gaps excluded by design)
 ```
 
-Covered classes: `CAM-INJ-001/002`, `CAM-PPE-001/002/003/004`, `CAM-RUN-001`,
-`CAM-PERM-001`, `CAM-SUP-001/002`, `CAM-GL-INJ-001`, `CAM-GL-DBG-001`.
+Covered classes: `CAM-INJ-001/002/003`, `CAM-PPE-001/002/003/004/005`,
+`CAM-RUN-001`, `CAM-PERM-001`, `CAM-SUP-001/002`, `CAM-GL-INJ-001`,
+`CAM-GL-DBG-001`.
 
-### Known coverage gaps (the honest frontier)
+### Closing the frontier (M7)
 
-These are real, exploitable patterns the corpus encodes that Caminus does **not**
-yet detect. Each is a candidate for a future rule:
+The three gaps the M6 benchmark exposed are now **closed** — and closed without
+losing precision (still 0 FP):
 
-1. **`actions/github-script` injection** — untrusted input interpolated into the
-   `script:` (a JavaScript context), not a `run:` shell. Caminus models `run:`
-   sinks only.
-2. **Nested composite actions** — taint forwarded from an outer composite to an
-   inner one; Caminus follows a single call hop.
-3. **Local JavaScript actions** — untrusted input reaching a shell inside a local
-   `node20` action's `index.js`; Caminus does not analyze JS.
+- **`actions/github-script` injection** → `CAM-INJ-003` (Critical). The `script:`
+  input is JavaScript eval'd with the workflow token; an untrusted `${{ }}` in it
+  is a confident injection, modeled directly.
+- **Nested composite actions** and **local JavaScript actions** → `CAM-PPE-005`
+  (Info / UNASSESSED). When a tainted input crosses into an action whose sink
+  Caminus cannot resolve — a composite that forwards it onward, or a non-composite
+  JS/Docker action — Caminus surfaces it as UNKNOWN rather than scoring it clean.
+  The Info tier keeps it below the gate and out of the precision-sensitive set,
+  and it stays silent on the *resolvable-safe* composite (no false UNASSESSED).
 
-Further catalogued (not yet in the corpus): `$GITHUB_ENV` / `$GITHUB_OUTPUT`
-injection consumed by a later step, cache/artifact poisoning on `workflow_run`,
-and `${{ steps.*.outputs.* }}` taint laundering.
+### Known coverage gap (the honest frontier)
+
+One real, exploitable pattern remains uncovered — and is missed by **all three**
+scanners benchmarked, not just Caminus:
+
+1. **`$GITHUB_ENV` cross-step laundering** — an untrusted value written into
+   `$GITHUB_ENV` in one step (with the write itself quoted, so the inline rules
+   stay silent) and then used unquoted in a *later* step. Caminus does not track
+   values that flow between steps through `$GITHUB_ENV`.
+
+Further catalogued (not yet in the corpus): `$GITHUB_OUTPUT` /
+`${{ steps.*.outputs.* }}` taint laundering, cache/artifact poisoning on
+`workflow_run`, and JS sinks reached through a reusable workflow.
 
 ## Comparison with other scanners
 
@@ -106,17 +119,17 @@ runs the same corpus through each tool and maps its output to the per-case groun
 truth. Status and methodology: see [`COMPARISON.md`](COMPARISON.md). Numbers are
 only published for tools actually executed — no estimated or asserted figures.
 
-**Measured so far (2026-06-03):**
+**Measured so far (2026-06-03, with the M7 gap-closing rules):**
 
-- `poutine` (Linux/WSL) — 4/12 covered classes, 0 FP, catches 1 of Caminus's 3
-  gaps (`gap-github-script`).
-- `octoscan` (Synacktiv, Go) — 4/10 covered GitHub classes (GitLab N/A,
-  GitHub-only), **1 FP** (precision 80%), and it catches **all 3** of Caminus's
-  gaps via a coarse input-side heuristic — the same coarseness that produces the
-  false positive on `safe-composite-safeinput`.
+- `poutine` (Linux/WSL) — 5/15 covered classes, 0 FP.
+- `octoscan` (Synacktiv, Go, GitHub-only) — 7/13 covered GitHub classes (GitLab
+  N/A), **1 FP** (precision 88%) on `safe-composite-safeinput`.
 
-The three tools are complementary; Caminus is the only one covering env-routed /
-indirect-file / reusable-workflow / supply-chain / GitLab classes, and it held
-100% precision. See [`COMPARISON.md`](COMPARISON.md) for the per-case tables, the
-measured precision/recall tradeoff, and the note that this corpus is shaped toward
+Now that Caminus covers the github-script / nested-composite / local-JS surface
+(via `CAM-INJ-003` + `CAM-PPE-005`), it matches octoscan's reach there **without**
+octoscan's false positive, and remains the only tool covering env-routed /
+indirect-file / reusable-workflow / supply-chain / GitLab classes — at 100%
+precision. All three miss the one remaining corpus gap (`$GITHUB_ENV` laundering).
+See [`COMPARISON.md`](COMPARISON.md) for the per-case tables, the measured
+precision/recall tradeoff, and the note that this corpus is shaped toward
 Caminus's classes (a coverage comparison, not an unbiased ranking).

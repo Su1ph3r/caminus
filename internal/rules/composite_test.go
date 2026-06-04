@@ -210,3 +210,74 @@ func TestComposite_RemoteActionNotResolved(t *testing.T) {
 		t.Fatalf("a remote owner/repo@ref action is not a local composite; should not flag, got %v", ids)
 	}
 }
+
+// localJSAction is a non-composite (node) action — Caminus cannot read its JS
+// sink, so a tainted input reaching it is UNASSESSED (CAM-PPE-005), not silent.
+const localJSAction = `name: jsgreet
+inputs:
+  title: { required: true }
+runs:
+  using: node20
+  main: index.js
+`
+
+func TestComposite_NonCompositeIsUnassessed(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml":         callerStepUsesComposite,
+		".github/actions/greet/action.yml": localJSAction,
+		".github/actions/greet/index.js":   "console.log(process.env.INPUT_TITLE)\n",
+	})
+	if ids := compositeFindings(t, root); !has(ids, "CAM-PPE-005/info") {
+		t.Fatalf("untrusted input into a JS action's unanalyzable sink should be CAM-PPE-005/info, got %v", ids)
+	}
+}
+
+// forwardingComposite forwards the tainted input to a nested local action that
+// Caminus does not follow — UNASSESSED rather than silent.
+const forwardingComposite = `name: outer
+inputs:
+  title: { required: true }
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/inner
+      with:
+        forwarded: ${{ inputs.title }}
+`
+
+func TestComposite_NestedForwardIsUnassessed(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml":         callerStepUsesComposite,
+		".github/actions/greet/action.yml": forwardingComposite,
+		".github/actions/inner/action.yml": compositeManifestVuln,
+	})
+	if ids := compositeFindings(t, root); !has(ids, "CAM-PPE-005/info") {
+		t.Fatalf("a composite forwarding the input to a nested action should be CAM-PPE-005/info, got %v", ids)
+	}
+}
+
+func TestComposite_SafeInputNoUnassessed(t *testing.T) {
+	// safe-composite case: composite uses only the non-tainted input, no nested
+	// uses, no JS — Caminus RESOLVED it as safe, so no PPE-005 (precision).
+	root := writeRepo(t, map[string]string{
+		".github/workflows/wf.yml":         callerStepUsesComposite,
+		".github/actions/greet/action.yml": calleeUsesOnlySafeInputComposite,
+	})
+	for _, id := range compositeFindings(t, root) {
+		if id == "CAM-PPE-005/info" {
+			t.Fatalf("a resolvable composite that doesn't use the tainted input must NOT raise PPE-005, got %v", compositeFindings(t, root))
+		}
+	}
+}
+
+// calleeUsesOnlySafeInputComposite uses inputs.mode (safe), never inputs.title.
+const calleeUsesOnlySafeInputComposite = `name: greet
+inputs:
+  title: { required: true }
+  mode: { required: false }
+runs:
+  using: composite
+  steps:
+    - run: echo "${{ inputs.mode }}"
+      shell: bash
+`

@@ -3,6 +3,31 @@
 All notable changes to Caminus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.1] — 2026-06-03
+
+Closes the three coverage gaps the v0.7.0 benchmark documented — without losing
+precision (still 0 false positives on the near-miss set).
+
+### Added — close the benchmark frontier
+- **`CAM-INJ-003` — actions/github-script injection.** An untrusted
+  `${{ github.event.* }}` interpolated into a github-script `script:` is evaluated
+  as JavaScript with the workflow token — expression injection in a JS sink the
+  `run:`-only rules never saw. Confident (Critical). Stays silent on the
+  recommended-safe `env:` + `process.env` form. Closes the `inj-github-script`
+  gap.
+- **`CAM-PPE-005` — untrusted input into an unresolvable action sink (Info /
+  UNASSESSED).** When a tainted `with:` input crosses, under an attacker trigger,
+  into a local action whose injection surface Caminus cannot resolve — a
+  non-composite JS/Docker action, or a composite that forwards the input to a
+  nested action — Caminus reports the path as UNKNOWN rather than scoring it
+  clean. Info severity (below the gate, outside the precision-sensitive set), and
+  it stays silent on a *resolvable-safe* composite (no false UNASSESSED). Closes
+  the `ppe-nested-composite` and `ppe-local-js` gaps while keeping 100% precision.
+- **Benchmark:** corpus grown to 22 cases (15 covered, 6 safe, 1 gap); the three
+  former gaps relabeled as covered; a new honest gap added — `$GITHUB_ENV`
+  cross-step laundering, missed by Caminus, poutine, and octoscan alike. Caminus
+  now matches octoscan's injection-into-action reach at 0 FP (octoscan pays 1 FP).
+
 ## [0.7.0] — 2026-06-03
 
 Milestones **M5 (reusable workflows & composite actions)** and **M6 (precision/

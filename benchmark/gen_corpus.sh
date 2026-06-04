@@ -261,12 +261,11 @@ jobs:
     secrets: inherit
 Y
 
-####################### KNOWN GAP — vuln Caminus misses ######################
+############### COVERED (M7) — formerly gaps, now detected ###################
 
-# G1: injection via actions/github-script `script:` (a JS context, not run:).
-# The action is SHA-pinned so CAM-SUP-001 stays silent — the only thing to find
-# is the injection, which Caminus does not yet detect.
-w gap-github-script/.github/workflows/wf.yml <<'Y'
+# github-script injection — untrusted ${{ }} in actions/github-script `script:`
+# (a JS eval sink). SHA-pinned so CAM-SUP-001 stays silent. Now CAM-INJ-003.
+w inj-github-script/.github/workflows/wf.yml <<'Y'
 name: ci
 on: [pull_request_target]
 jobs:
@@ -278,10 +277,9 @@ jobs:
           script: console.log("${{ github.event.pull_request.title }}")
 Y
 
-# G2: nested composite — the caller's action forwards the input to a SECOND
-# composite that uses it unsafely. Caminus follows one hop only, so the nested
-# sink is missed.
-w gap-nested-composite/.github/workflows/wf.yml <<'Y'
+# nested composite — the caller's action forwards the input to a SECOND composite.
+# Caminus follows one hop, so the inner sink is unresolved → CAM-PPE-005 (Info).
+w ppe-nested-composite/.github/workflows/wf.yml <<'Y'
 name: ci
 on: [pull_request_target]
 jobs:
@@ -292,7 +290,7 @@ jobs:
         with:
           title: ${{ github.event.pull_request.title }}
 Y
-w gap-nested-composite/.github/actions/outer/action.yml <<'Y'
+w ppe-nested-composite/.github/actions/outer/action.yml <<'Y'
 name: outer
 inputs:
   title: { required: true }
@@ -303,7 +301,7 @@ runs:
       with:
         forwarded: ${{ inputs.title }}
 Y
-w gap-nested-composite/.github/actions/inner/action.yml <<'Y'
+w ppe-nested-composite/.github/actions/inner/action.yml <<'Y'
 name: inner
 inputs:
   forwarded: { required: true }
@@ -314,9 +312,9 @@ runs:
       shell: bash
 Y
 
-# G3: untrusted input into a LOCAL JavaScript action (not composite). Caminus
-# cannot analyze JS, so the sink in index.js is invisible.
-w gap-local-js-action/.github/workflows/wf.yml <<'Y'
+# local JavaScript action (not composite). Caminus cannot read the JS sink, so
+# untrusted input reaching it is UNASSESSED → CAM-PPE-005 (Info).
+w ppe-local-js/.github/workflows/wf.yml <<'Y'
 name: ci
 on: [pull_request_target]
 jobs:
@@ -327,7 +325,7 @@ jobs:
         with:
           title: ${{ github.event.pull_request.title }}
 Y
-w gap-local-js-action/.github/actions/jsgreet/action.yml <<'Y'
+w ppe-local-js/.github/actions/jsgreet/action.yml <<'Y'
 name: jsgreet
 inputs:
   title: { required: true }
@@ -335,9 +333,28 @@ runs:
   using: node20
   main: index.js
 Y
-w gap-local-js-action/.github/actions/jsgreet/index.js <<'J'
+w ppe-local-js/.github/actions/jsgreet/index.js <<'J'
 const { execSync } = require("child_process");
 execSync("echo " + process.env.INPUT_TITLE); // untrusted -> shell
 J
+
+####################### KNOWN GAP — vuln Caminus misses ######################
+
+# $GITHUB_ENV cross-step laundering. The write step quotes $TITLE (so the
+# inline/indirect rules stay silent), but it writes the untrusted value into
+# $GITHUB_ENV; a LATER step then uses that env var unquoted. Caminus does not
+# track values that flow through $GITHUB_ENV between steps, so the sink is missed.
+w gap-github-env/.github/workflows/wf.yml <<'Y'
+name: ci
+on: [pull_request_target]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: echo "LAUNDERED=$TITLE" >> "$GITHUB_ENV"
+      - run: echo building $LAUNDERED
+Y
 
 echo "corpus generated: $(find corpus -mindepth 1 -maxdepth 1 -type d | wc -l) cases"

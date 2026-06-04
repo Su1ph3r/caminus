@@ -31,7 +31,7 @@ def load_jsonl(path):
 # expected class?". Only genuine equivalences are listed; a tool rule with no
 # Caminus counterpart (or vice versa) simply does not match, which is the point.
 POUTINE_MAP = {
-    "injection": {"CAM-INJ-001", "CAM-INJ-002"},
+    "injection": {"CAM-INJ-001", "CAM-INJ-002", "CAM-INJ-003"},
     "untrusted_checkout_exec": {"CAM-PPE-001"},
     "pr_runs_on_self_hosted": {"CAM-RUN-001"},
     "debug_enabled": {"CAM-GL-DBG-001"},
@@ -46,7 +46,10 @@ POUTINE_MAP = {
 # whether the action actually uses the input, which is why it both catches the
 # gap cases and false-positives on safe-composite-safeinput (see COMPARISON.md).
 OCTOSCAN_MAP = {
-    "expression-injection": {"CAM-INJ-001", "CAM-INJ-002", "CAM-PPE-003", "CAM-PPE-004"},
+    "expression-injection": {
+        "CAM-INJ-001", "CAM-INJ-002", "CAM-INJ-003",
+        "CAM-PPE-003", "CAM-PPE-004", "CAM-PPE-005",
+    },
     "dangerous-checkout": {"CAM-PPE-001"},
     "runner-label": {"CAM-RUN-001"},
     # local-action (informational), dangerous-write ($GITHUB_ENV — no Caminus

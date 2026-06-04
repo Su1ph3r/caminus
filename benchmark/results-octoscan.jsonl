@@ -1,13 +1,14 @@
-{"id":"gap-github-script","platform":"github","rules":["expression-injection"]}
-{"id":"gap-local-js-action","platform":"github","rules":["expression-injection", "local-action"]}
-{"id":"gap-nested-composite","platform":"github","rules":["expression-injection", "local-action"]}
+{"id":"gap-github-env","platform":"github","rules":["dangerous-write"]}
 {"id":"gl-debug","platform":"gitlab","rules":[]}
 {"id":"gl-inj","platform":"gitlab","rules":[]}
 {"id":"inj-direct","platform":"github","rules":["expression-injection"]}
 {"id":"inj-envrouted","platform":"github","rules":[]}
+{"id":"inj-github-script","platform":"github","rules":["expression-injection"]}
 {"id":"perm-writeall","platform":"github","rules":[]}
 {"id":"ppe-composite","platform":"github","rules":["expression-injection", "local-action"]}
 {"id":"ppe-indirect-script","platform":"github","rules":[]}
+{"id":"ppe-local-js","platform":"github","rules":["expression-injection", "local-action"]}
+{"id":"ppe-nested-composite","platform":"github","rules":["expression-injection", "local-action"]}
 {"id":"ppe-pwnrequest","platform":"github","rules":["dangerous-checkout"]}
 {"id":"ppe-reusable","platform":"github","rules":["local-action"]}
 {"id":"run-selfhosted","platform":"github","rules":["runner-label"]}

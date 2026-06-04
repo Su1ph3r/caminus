@@ -61,40 +61,24 @@ Reproduce: `POUTINE=<bin> bash benchmark/compare_poutine.sh` (Linux) then
 
 poutine's local analyzer does **not** load repositories under Windows go-git
 (every rule passes vacuously); it was run from Linux (Kali WSL) against each case
-as a committed git repo. Per-corpus result:
+as a committed git repo. Per-corpus result (after the M7 gap-closing rules grew
+the corpus to 15 covered classes):
 
 ```
-TP=4  FN=8  FP=0  TN=6   gaps: 2 missed, 1 caught
-precision=100%   recall=33%  (over the 12 covered classes of this corpus)
+TP=5  FN=10  FP=0  TN=6   gaps: 1 missed, 0 caught
+precision=100%   recall=33%  (over the 15 covered classes of this corpus)
 ```
 
-| corpus case (class)                         | Caminus | poutine | note |
-|---------------------------------------------|:-------:|:-------:|------|
-| inj-direct (`CAM-INJ-001`)                  |   ✓     |   ✓     | both: `injection` |
-| inj-envrouted (`CAM-INJ-002`)               |   ✓     |   ✗     | env-routed unquoted use — poutine misses |
-| ppe-pwnrequest (`CAM-PPE-001`)              |   ✓     |   ✓     | both: `untrusted_checkout_exec` |
-| ppe-indirect-script (`CAM-PPE-002`)         |   ✓     |   ✗     | sink in an executed shell file |
-| ppe-reusable (`CAM-PPE-003`)                |   ✓     |   ✗     | reusable-workflow boundary |
-| ppe-composite (`CAM-PPE-004`)               |   ✓     |   ✗     | composite-action boundary |
-| run-selfhosted (`CAM-RUN-001`)              |   ✓     |   ✓     | both: `pr_runs_on_self_hosted` |
-| perm-writeall (`CAM-PERM-001`)              |   ✓     |   ✗     | poutine's perms rule is scoped to risky events |
-| sup-unpinned (`CAM-SUP-001`)                |   ✓     |   ✗     | poutine does not flag plain mutable tags by default |
-| sup-reusable-mutable (`CAM-SUP-002`)        |   ✓     |   ✗     | unpinned remote reusable workflow |
-| gl-inj (`CAM-GL-INJ-001`)                   |   ✓     |   ✗     | GitLab `$CI_*` injection |
-| gl-debug (`CAM-GL-DBG-001`)                 |   ✓     |   ✓     | both: `debug_enabled` |
-| **gap-github-script** (gap)                 |   ✗     |   ✓     | **poutine wins** — `script:` injection Caminus does not model |
-| gap-nested-composite (gap)                  |   ✗     |   ✗     | both miss the second composite hop |
-| gap-local-js-action (gap)                   |   ✗     |   ✗     | both: JS sink |
-| 6 safe / near-miss cases                    | 0 FP    | 0 FP    | neither false-positives on the recommended-safe forms |
+poutine detects `inj-direct`, `inj-github-script` (`injection`), `ppe-pwnrequest`
+(`untrusted_checkout_exec`), `run-selfhosted` (`pr_runs_on_self_hosted`), and
+`gl-debug` (`debug_enabled`); it misses the env-routed / indirect-file / reusable-
+workflow / composite / supply-chain classes and the `$GITHUB_ENV` gap.
 
-**Reading it honestly:** the two tools are largely **complementary**. Caminus's
-edge on this corpus is dataflow depth — env-routed injection, indirect-PPE into
-executed files, and injection across the reusable-workflow / composite-action
-call boundary (`CAM-PPE-002/003/004`), none of which poutine flags — plus GitLab
-injection and plain unpinned-tag coverage. poutine's edge is `actions/github-
-script` `script:` injection, which Caminus does not yet model (already on
-Caminus's known-gap list — this confirms it). Both held 100% precision on the
-near-miss set.
+Per-case verdicts are reproducible live — `python3 benchmark/score_comparison.py`
+prints the current table for both tools from `results-*.jsonl`. Caminus detects
+all 15 covered classes; poutine's 5 are the injection / pwn-request / self-hosted
+/ debug surface, and it has no rule for the dataflow-depth, supply-chain, or
+GitLab-injection classes. Both hold 100% precision on the six near-miss cases.
 
 ### octoscan v0.1.x (Synacktiv) — measured 2026-06-03
 
@@ -103,42 +87,33 @@ files (`compare_octoscan.sh` scans each case's `.github/workflows/*.yml`). It is
 **GitHub-only**, so the two GitLab cases are scored **N/A**, not missed.
 
 ```
-TP=4  FN=6  FP=1  TN=5  N/A=2   gaps: 0 missed, 3 caught
-precision=80%   recall=40%  (over the 10 covered GitHub classes; GitLab N/A)
+TP=7  FN=6  FP=1  TN=5  N/A=2   gaps: 1 missed, 0 caught
+precision=88%   recall=54%  (over the 13 covered GitHub classes; GitLab N/A)
 ```
 
-| corpus case (class)                  | Caminus | octoscan | note |
-|--------------------------------------|:-------:|:--------:|------|
-| inj-direct (`CAM-INJ-001`)           |   ✓     |    ✓     | `expression-injection` |
-| inj-envrouted (`CAM-INJ-002`)        |   ✓     |    ✗     | env-routed unquoted use — octoscan misses |
-| ppe-pwnrequest (`CAM-PPE-001`)       |   ✓     |    ✓     | `dangerous-checkout` |
-| ppe-indirect-script (`CAM-PPE-002`)  |   ✓     |    ✗     | sink in an executed shell file |
-| ppe-reusable (`CAM-PPE-003`)         |   ✓     |    ✗     | only flags `local-action` (informational), not the injection |
-| ppe-composite (`CAM-PPE-004`)        |   ✓     |    ✓     | flags untrusted `${{ }}` in the step `with:` |
-| run-selfhosted (`CAM-RUN-001`)       |   ✓     |    ✓     | `runner-label` |
-| perm-writeall (`CAM-PERM-001`)       |   ✓     |    ✗     | no equivalent rule |
-| sup-unpinned (`CAM-SUP-001`)         |   ✓     |    ✗     | no plain-unpinned-tag rule |
-| sup-reusable-mutable (`CAM-SUP-002`) |   ✓     |    ✗     | — |
-| gl-inj / gl-debug (GitLab)           |   ✓     |   N/A    | octoscan is GitHub-only |
-| **gap-github-script** (gap)          |   ✗     |    ✓     | `expression-injection` in `script:` — Caminus does not model it |
-| **gap-nested-composite** (gap)       |   ✗     |    ✓     | flags the untrusted `with:` input-side (no hop-tracing needed) |
-| **gap-local-js-action** (gap)        |   ✗     |    ✓     | flags the untrusted `with:` input-side |
-| **safe-composite-safeinput** (safe)  | clean   | **FP**   | flags the tainted `title` the composite never uses |
+octoscan detects `inj-direct`, `inj-github-script`, `ppe-pwnrequest`,
+`ppe-composite`, `ppe-nested-composite`, `ppe-local-js` (all via its broad
+`expression-injection` / `dangerous-checkout` / `runner-label` rules), and
+`run-selfhosted`. It misses the env-routed, indirect-file, reusable-workflow, and
+supply-chain classes, and the `$GITHUB_ENV` gap. Its one false positive remains
+`safe-composite-safeinput`.
 
-**The precision/recall tradeoff, measured.** octoscan's `expression-injection`
-fires whenever an untrusted `${{ }}` appears in a `run:`, a step `with:`, or a
-`script:` — *without tracing whether the action actually uses it*. That coarser,
-input-side heuristic is why octoscan **catches all three of Caminus's gaps**
-(github-script, nested composite, local JS) — it does not need to follow the sink
-— but it is also why it **false-positives on `safe-composite-safeinput`**, where
-the tainted `title` is passed but the composite only consumes the safe `mode`
-input. Caminus's dataflow precision is the mirror image: it traces the input to
-the actual sink, so it stays silent on the safe case (0 FP) but is silent too
-when the sink is in a context it does not yet model (a `script:` block, a second
-composite hop, or JavaScript). Neither is strictly better — octoscan trades
-precision for recall on the injection-into-action surface; Caminus trades that
-recall for precision and adds the env-routed / indirect-file / reusable-workflow
-/ supply-chain classes octoscan has no rule for.
+**The precision/recall tradeoff, measured — and how Caminus closed it.** octoscan's
+`expression-injection` fires whenever an untrusted `${{ }}` appears in a `run:`, a
+step `with:`, or a `script:` — *without tracing whether the action actually uses
+it*. That coarse, input-side heuristic is why octoscan catches the github-script /
+nested-composite / local-JS cases — it does not follow the sink — but it is also
+why it **false-positives on `safe-composite-safeinput`**, flagging the tainted
+`title` the composite never consumes. In M6 these three cases were Caminus's known
+gaps. In M7 Caminus **closed them** the precision-preserving way: `CAM-INJ-003`
+models the github-script `script:` eval directly (a confident detection), and
+`CAM-PPE-005` raises an **Info/UNASSESSED** signal when a tainted input crosses
+into an action whose sink it cannot resolve (a nested-forwarding composite, or a
+JS/Docker action). Crucially, `CAM-PPE-005` stays **silent on the resolvable-safe
+composite** — Caminus reads the manifest, sees `title` is unused, and does not
+raise it — so Caminus now matches octoscan's reach on this surface **without
+inheriting its false positive**. The remaining honest gap (`$GITHUB_ENV` cross-
+step laundering) is missed by all three tools.
 
 ### Tools not run
 
@@ -160,14 +135,16 @@ honest headline is *not* "Caminus wins" but *what each approach buys*:
   indirect-PPE into executed files (`CAM-PPE-002`), reusable-workflow injection
   (`CAM-PPE-003`), supply-chain pinning (`CAM-SUP-001/002`), and GitLab — and it
   did so at **100% precision** (0 FP) because it traces dataflow to the sink.
-- **octoscan** — strongest on injection breadth via a coarse input-side heuristic;
-  catches the `script:` / nested / JS cases Caminus misses, at the cost of 1 FP.
+- **octoscan** — strong injection breadth via a coarse input-side heuristic, but
+  it pays 1 FP for it; Caminus now matches its injection-into-action reach
+  (`CAM-INJ-003` + `CAM-PPE-005`) at 0 FP.
 - **poutine** — solid on the classic pwn-request / self-hosted / debug surface and
   supply-chain themes Caminus does not model (confused-deputy, unpinnable, known-
   vulnerable components — not yet in this corpus).
 
-The actionable output for Caminus: the three known gaps (github-script `script:`,
-nested composite, local JS) are exactly where octoscan's input-side check adds
-value — candidates for a future Caminus rule that flags untrusted input crossing
-into an action whose sink it cannot resolve (an UNASSESSED-style signal), keeping
-precision while closing the recall gap.
+M7 acted on M6's actionable output: the three gaps octoscan's input-side check
+exposed are now closed — `CAM-INJ-003` (confident) for github-script, and the
+UNASSESSED-style `CAM-PPE-005` for the unresolvable-sink cases — keeping 100%
+precision while raising recall to all 15 covered classes. The frontier moves on:
+`$GITHUB_ENV` / `$GITHUB_OUTPUT` cross-step laundering is the next candidate, and
+it is missed by every tool benchmarked here.

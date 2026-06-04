@@ -70,7 +70,9 @@ func (CompositeActionInjection) Apply(doc *workflow.Doc) []model.Finding {
 			continue
 		}
 		callee := workflow.Parse(real, data)
+		resolved := map[string]bool{}
 		for _, site := range scanReusableCallee(callee, tainted) {
+			resolved[site.Input] = true
 			out = append(out, model.Finding{
 				RuleID:   "CAM-PPE-004",
 				Title:    fmt.Sprintf("Composite-action injection: untrusted input %q reaches a run: in action %s", site.Input, shortRel(root, site.File)),
@@ -97,8 +99,101 @@ func (CompositeActionInjection) Apply(doc *workflow.Doc) []model.Finding {
 				},
 			})
 		}
+		// A tainted input with no resolved run: sink is not automatically safe: the
+		// action's sink may be in a context Caminus cannot read (a non-composite
+		// JS/Docker action) or one hop further out (the composite forwards the input
+		// to a nested action). Surface that as UNASSESSED (Info, below the gate) so
+		// the path is reported as UNKNOWN rather than silently scored clean — while
+		// staying silent when the input genuinely is not used (the composite
+		// resolved it as safe). This is the precision-preserving close of the
+		// reusable/composite coverage frontier the benchmark identified.
+		for name := range tainted {
+			if resolved[name] {
+				continue
+			}
+			if reason, ok := unresolvableSink(callee, name); ok {
+				out = append(out, unresolvedSinkFinding(doc, i, dir, shortRel(root, real), name, reason))
+			}
+		}
 	}
 	return out
+}
+
+// unresolvableSink reports whether a composite manifest's injection surface for
+// the input `name` is one Caminus cannot resolve — so a tainted input reaching it
+// is UNKNOWN, not clean. Two cases: the action is not a composite (a JS/Docker
+// action whose sink Caminus does not read), or it is composite but forwards the
+// input to a further `uses:` (a nested action Caminus does not follow). It returns
+// false for a composite that simply does not use the input (genuinely safe), so
+// no false UNASSESSED is raised on the recommended-safe shape.
+func unresolvableSink(callee *workflow.Doc, name string) (string, bool) {
+	using := manifestUsing(callee)
+	if using != "" && using != "composite" {
+		return "the action is a `" + using + "` action whose injection sink Caminus does not analyze", true
+	}
+	if manifestHasNestedUses(callee) && manifestReferencesInput(callee, name) {
+		return "the composite forwards the input to a nested local action Caminus does not follow", true
+	}
+	return "", false
+}
+
+var reUsingKey = regexp.MustCompile(`^\s*using:\s*["']?([A-Za-z0-9_.-]+)`)
+
+// manifestUsing returns the runs.using value of an action manifest ("composite",
+// "node20", "docker", …), or "" if none is found.
+func manifestUsing(callee *workflow.Doc) string {
+	for _, line := range callee.Lines {
+		if m := reUsingKey.FindStringSubmatch(line); m != nil {
+			return strings.ToLower(m[1])
+		}
+	}
+	return ""
+}
+
+var reAnyUses = regexp.MustCompile(`^\s*(?:-\s+)?uses:\s*\S`)
+
+// manifestHasNestedUses reports whether the manifest invokes another action.
+func manifestHasNestedUses(callee *workflow.Doc) bool {
+	for _, line := range callee.Lines {
+		if reAnyUses.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
+
+// manifestReferencesInput reports whether the manifest references inputs.<name>
+// anywhere (e.g. forwarded into a nested action's with:).
+func manifestReferencesInput(callee *workflow.Doc, name string) bool {
+	for _, line := range callee.Lines {
+		for _, m := range reInputsRef.FindAllStringSubmatch(line, -1) {
+			if m[1] == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// unresolvedSinkFinding builds the CAM-PPE-005 UNASSESSED finding.
+func unresolvedSinkFinding(doc *workflow.Doc, usesIdx int, dir, manifest, name, reason string) model.Finding {
+	return model.Finding{
+		RuleID:   "CAM-PPE-005",
+		Title:    "Untrusted input reaches a local action whose injection sink could not be analyzed",
+		Severity: model.SevInfo,
+		Category: model.CatPPEIndirect,
+		File:     doc.Path,
+		Line:     usesIdx + 1,
+		Evidence: trim(doc.Lines[usesIdx]),
+		Description: "The workflow runs on an attacker-influenced trigger and passes untrusted input " + name +
+			" to the local action " + dir + " (manifest " + manifest + "), but " + reason + ". The injection " +
+			"surface was therefore NOT assessed — treat this path as UNKNOWN rather than clean. Review the " +
+			"action by hand, or refactor so the untrusted input does not cross into an unanalyzable sink.",
+		Remediation: "Do not pass attacker-controllable input into an action whose body cannot be reviewed by a " +
+			"workflow scan (a JavaScript/Docker action, or a composite that forwards it onward). Validate or drop " +
+			"the input before the call, or inline the logic so the sink is visible.",
+		Confirmable: false,
+	}
 }
 
 // readManifest resolves <dir>/action.yml then .yaml under root. found is false
