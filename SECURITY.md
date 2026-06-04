@@ -36,16 +36,22 @@ stable** and changes to it follow semver-style care:
 New rules may be added in a minor release (they can surface new findings on an
 unchanged input — that is coverage, not a breaking change).
 
-**Experimental — the surface may change without a major bump:**
+**Supported — validated and behavior-stable, but their *output schemas* may
+still evolve in a minor release:**
 - `caminus enum`, `graph`, and `cloud` (authenticated enumeration, the trust
-  graph, and the OIDC→cloud blast-radius), and their output graph schema;
-- `caminus exploit`, including `--arm` live confirmation;
+  graph, and the OIDC→cloud blast-radius) — and the `graph.json` schema;
+- `caminus exploit`, including `--arm` live confirmation, and the PoC artifact
+  format;
 - the structural-YAML engine (`-tags yaml`).
 
-These are powerful and require a token and/or a target you own; they are
-validated by unit/record-replay tests but have not been hardened to the same
-"stable" bar as `scan`. Use them deliberately, and only against assets you own
-or are authorized to test.
+These require a token and/or a target you own, and must only be run against
+assets you own or are authorized to test. They are covered by unit and
+record/replay tests **and** were validated end-to-end against a real GitHub
+repository (2026-06-04): `enum`→`graph` on live data, and a full reversible
+`exploit --arm` cycle (branch delivery → workflow trigger → canary confirmation
+in run logs → branch teardown). The CLI surface is stable; the `graph.json` and
+PoC formats are still allowed to change as the trust model grows, so pin a
+version if you consume them programmatically.
 
 ## Platform scope
 

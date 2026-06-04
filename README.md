@@ -108,10 +108,11 @@ caminus scan . --gate critical      # exit 1 only on critical
 caminus scan . --gate none          # never fail the build
 ```
 
-### Trust graph & attack paths (token required) — *experimental*
+### Trust graph & attack paths (token required)
 
-> `enum` / `graph` / `cloud` are **experimental** (not covered by the stability
-> commitment in [`SECURITY.md`](./SECURITY.md)); they need a token and, for
+> `enum` / `graph` / `cloud` are **supported** (real-target-validated) but
+> auth/target-dependent, and their `graph.json` schema may still evolve — see the
+> stability tiers in [`SECURITY.md`](./SECURITY.md). They need a token and, for
 > `cloud`, credentials for a target you own.
 
 ```bash
@@ -134,10 +135,11 @@ This surfaces chains like *poisoned pipeline → OIDC federation → assumable c
 identity* (`CAM-OIDC-002`: an AWS role, GCP service account, or Azure app), plus
 paths to self-hosted runners and CI secrets — for both GitHub and GitLab graphs.
 
-### Confirm a finding (PoC generation) — *experimental*
+### Confirm a finding (PoC generation)
 
-> `exploit` (including `--arm`) is **experimental** and only ever targets a CI
-> repository you own or are authorized to test. See [`SECURITY.md`](./SECURITY.md).
+> `exploit` (including `--arm`) is **supported** — the full reversible arm cycle
+> is real-target-validated — but only ever targets a CI repository you own or are
+> authorized to test, and the PoC format may evolve. See [`SECURITY.md`](./SECURITY.md).
 
 `exploit` turns a **confirmable** finding into a concrete, non-destructive PoC —
 the attack input / pipeline payload with a benign canary — plus a reversible
@@ -279,8 +281,9 @@ confirmation, reusable-workflow / composite-action injection, and the benchmark)
 - **Stable surface** (changes avoided + noted in `CHANGELOG.md`): the `scan`
   command + flags + exit codes, the JSON/SARIF schemas, existing rule IDs, and the
   Action inputs.
-- **Experimental** (may change without a major bump): `enum` / `graph` / `cloud`
-  and `exploit` (auth/target-dependent), and the `-tags yaml` engine.
+- **Supported** (real-target-validated; CLI stable, but `graph.json` / PoC output
+  schemas may evolve): `enum` / `graph` / `cloud` and `exploit` (incl. `--arm`),
+  and the `-tags yaml` engine. Auth/target-dependent — own/authorized targets only.
 
 Full policy and vulnerability reporting: [`SECURITY.md`](./SECURITY.md).
 

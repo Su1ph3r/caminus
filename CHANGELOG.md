@@ -32,6 +32,14 @@ documented stability commitment and scope.
 - **Real-world validation:** `scan` exercised on 114 real workflow files with no
   crashes; findings corroborated by zizmor's published `ignore` annotations on
   grafana, and near-zero noise on a SHA-pinned repo (goreleaser: 2 findings).
+- **Dynamic-feature validation (real GitHub target).** `enum`→`graph` validated
+  against a live repo (4 pipelines, a 9-node trust graph, 3 MITRE-tagged attack
+  paths). The full reversible `exploit --arm` cycle was exercised end-to-end —
+  branch delivery → `on: push` trigger → benign canary echoed on `ubuntu-latest`
+  → canary confirmed in the run logs → branch teardown verified (`proved=true`,
+  `cleaned_up=true`, no leftover branch). The `enum`/`graph`/`cloud`/`exploit`
+  commands move from *experimental* to **supported** in `SECURITY.md` (CLI stable;
+  `graph.json` / PoC schemas may still evolve).
 - Benchmark grown to 23 cases (7 safe) — still 100% precision / 100% recall.
 
 ## [0.7.1] — 2026-06-03
