@@ -57,4 +57,4 @@ version if you consume them programmatically.
 
 Caminus supports **GitHub Actions** and **GitLab CI**. Other CI systems
 (CircleCI, Azure Pipelines, Jenkins, Bitbucket Pipelines) are out of scope for
-the current line and tracked as post-1.0 in [`PLAN.md`](./PLAN.md).
+the current line and tracked as post-1.0 in [`DESIGN.md`](./DESIGN.md) §Roadmap.

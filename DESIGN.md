@@ -1,14 +1,10 @@
 # Caminus — Design & Strategy
 
-*Caminus* (Latin: forge, hearth, furnace) — the forge is where raw source is
-turned into shipped artifacts, and where the software supply chain is most often
-broken. It keeps the Latin-noun naming of the suite (Vinculum, Indago, Vallum).
-
-Caminus is a **multi-platform CI/CD pipeline attack framework**: it maps a
-pipeline compromise as a trust graph from an attacker-controllable trigger to
-its blast radius — secrets, self-hosted runners, and (via OIDC) cloud roles and
-the resources behind them — and is built to **dynamically confirm** the
-primitives it finds.
+Caminus is a multi-platform CI/CD pipeline security scanner and attack-path tool:
+it maps a pipeline compromise as a trust graph from an attacker-controllable
+trigger to its blast radius (secrets, self-hosted runners, and, via OIDC, cloud
+roles and the resources behind them), and can dynamically confirm the primitives
+it finds against a target you own.
 
 ---
 
@@ -38,18 +34,15 @@ primitive into a **confirmed** one. That is Caminus.
    cross-provider paths.
 2. **OIDC trust-chain resolution.** The high-value, fully-unautomated step:
    "this poisoned pipeline can assume *this* cloud role and reach *these*
-   resources." This is where Caminus hands off to **Nubicustos** for cloud
-   blast-radius.
+   resources." The `cloud` command resolves this blast radius by reading the
+   cloud IAM trust policies directly.
 3. **Static → dynamic confirmation.** Static scanners drown operators in
    maybe-exploitable flags. Caminus marks findings `confirmable` and the
    `exploit` stage proves them against a target you own (malicious-PR diff /
-   workflow payload with a benign canary) — aligned with the project's
-   runtime-PoC discipline.
-4. **Pipeline-native output.** The JSON report is a clean, Vinculum-shaped
-   tool-output document so Caminus can slot into the suite (correlation →
-   Ariadne synthesis → Nubicustos cloud edges) as the missing CI/CD node. A
-   dedicated Vinculum/Ariadne exporter is not built (deferred indefinitely);
-   today the integration seam is the JSON/SARIF report.
+   workflow payload with a benign canary).
+4. **Machine-readable output.** The JSON and SARIF reports make Caminus easy to
+   feed into code scanning, dashboards, or a downstream correlation/aggregation
+   step — the integration seam is the report, not a bespoke exporter.
 
 ---
 
@@ -92,8 +85,8 @@ Execution (PPE) classes:
                         │ enum   provider client → trust graph   │ [M2]
                         │   github / gitlab (platform.Platform)  │
                         └───────────────┬───────────────────────┘
-  Nubicustos cloud ───► ┌───────────────▼───────────────────────┐
-  export                │ graph  walk edges → AttackPath[]       │ [M2]
+  cloud creds ───────►  ┌───────────────▼───────────────────────┐
+  (cloud cmd)           │ graph  walk edges → AttackPath[]       │ [M2]
                         │   trigger→pipeline→runner/secret→OIDC  │
                         │   →cloud-role→resource                 │
                         └───────────────┬───────────────────────┘
@@ -103,11 +96,10 @@ Execution (PPE) classes:
                         │   (authorization-gated)                │
                         └───────────────┬───────────────────────┘
                                         ▼
-        reporter → text · json (Vinculum-shaped) · SARIF
+        reporter → text · json · SARIF
 ```
 
-Package layout (zero external Go dependencies, single binary — matches Vallum /
-Vercelsior house style):
+Package layout (zero external Go dependencies in the core, single binary):
 
 ```
 cmd/caminus/            CLI: main, cli (router), scan, enum, graph, exploit
@@ -115,7 +107,7 @@ internal/model/        Finding + trust-graph types (Node/Edge/Graph/AttackPath)
 internal/workflow/     dependency-free line model of a pipeline file
 internal/rules/        static attack rules (CAM-INJ/PPE/RUN/PERM/SUP-*)
 internal/platform/     provider abstraction (github/gitlab clients land in M2)
-internal/reporter/     text + JSON (Vinculum-shaped) + SARIF
+internal/reporter/     text + JSON + SARIF
 ```
 
 ### Design choices
@@ -154,7 +146,7 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
 - GitLab CI (`.gitlab-ci.yml`) static rules: script injection, MR-pipeline
   exposure, debug-trace, privileged dind, unpinned include.
 - SARIF reporter (CI gate, code scanning).
-- *Deferred:* indirect-PPE, structural YAML (`-tags yaml`), Ariadne export.
+- *Deferred:* indirect-PPE, structural YAML (`-tags yaml`).
 
 **M2 — enumeration & graph. (done)**
 - `internal/platform/github` read-only client (stdlib http): repos, workflows
@@ -221,7 +213,6 @@ unpinned actions), text + JSON output, severity gate, tests. Single binary.
   the `Dockerfile` is also a standalone Caminus image. (done)
 - Acceptance verified 2026-06-03: `goreleaser check` clean, snapshot builds
   archives+checksums+cask+scoop, Docker action gates (vuln→exit 1, safe→exit 0).
-- *Dropped (indefinitely):* Vinculum + Ariadne export.
 
 **M5 — reusable workflows & composite actions (depth). (done) (v0.7.0)**
 Injection taint followed across GitHub-native code-reuse boundaries — a known
@@ -261,8 +252,7 @@ precision story is just more surface to get wrong.
 
 ## Non-goals
 
-- Not a SAST/secrets scanner (TruffleHog/Semgrep own that; Caminus consumes their
-  output via Vinculum instead).
+- Not a SAST/secrets scanner (TruffleHog/Semgrep own that lane).
 - Not a compliance-posture tool (legitify's lane).
 - The `exploit` stage never targets third-party infrastructure without explicit
   ownership/authorization, and prefers reversible, evidence-adding actions.

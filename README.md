@@ -268,7 +268,7 @@ confirmation, reusable-workflow / composite-action injection, and the benchmark)
 ## Stability & scope
 
 - **Platforms:** GitHub Actions and GitLab CI. Other CI systems (CircleCI, Azure
-  Pipelines, Jenkins, Bitbucket) are post-1.0 — see [`PLAN.md`](./PLAN.md).
+  Pipelines, Jenkins, Bitbucket) are post-1.0 — see [`DESIGN.md`](./DESIGN.md) §Roadmap.
 - **Stable surface** (changes avoided + noted in `CHANGELOG.md`): the `scan`
   command + flags + exit codes, the JSON/SARIF schemas, existing rule IDs, and the
   Action inputs.

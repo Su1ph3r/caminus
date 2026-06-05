@@ -520,7 +520,7 @@ over the v0.1 scan engine (which earlier diff-scoped reviews had not covered):
   (repo + org), OIDC subject claims, and default-branch protection, emitting a
   `graph.json`.
 - **Record/replay transport** (`internal/vcr`) with `--record`/`--replay` so
-  enumeration is testable without a live token (à la Vercelsior).
+  enumeration is testable without a live token.
 
 ### Added — v0.1.0 (Sprint 1)
 - **GitLab CI support.** New `internal/gitlabci` parser and five rules at taxonomy
